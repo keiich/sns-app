@@ -1,0 +1,12 @@
+{
+  "name": "sns-app",
+  "version": "1.0.0",
+  "description": "簡易SNS投稿WEBアプリ",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

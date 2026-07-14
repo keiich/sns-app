@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ぷちSNS</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <h1>ぷちSNS</h1>
+  </header>
+
+  <main>
+    <form id="post-form" class="post-form">
+      <input
+        id="username-input"
+        type="text"
+        placeholder="ユーザー名（省略可）"
+        maxlength="30"
+        autocomplete="off"
+      />
+      <textarea
+        id="content-input"
+        placeholder="いまどうしてる？"
+        maxlength="280"
+        rows="3"
+        required
+      ></textarea>
+      <div class="post-form-footer">
+        <span id="char-count" class="char-count">0 / 280</span>
+        <button type="submit">投稿する</button>
+      </div>
+      <p id="error-message" class="error-message" hidden></p>
+    </form>
+
+    <ul id="post-list" class="post-list"></ul>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
