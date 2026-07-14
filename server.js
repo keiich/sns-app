@@ -14,6 +14,13 @@ const MAX_USERNAME_LENGTH = 30;
 const POSTS_KEY = 'sns:posts';
 const LIKES_KEY = 'sns:likes';
 const INDEX_KEY = 'sns:posts:index';
+// 返信も投稿と同じハッシュ(POSTS_KEY)に保存し、親投稿ごとの並び順だけを
+// 個別のソート済みセット(member=replyId, score=createdAt)で管理する
+const REPLIES_INDEX_PREFIX = 'sns:replies:';
+
+function replyIndexKey(postId) {
+  return `${REPLIES_INDEX_PREFIX}${postId}`;
+}
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -33,46 +40,69 @@ function toPublicPost(post, likes) {
   return { ...publicPost, likes };
 }
 
+// 投稿と返信で共通の入力チェック。エラー時は { error }、成功時は { username, content } を返す
+function validatePostInput(body) {
+  const { username, content } = body;
+
+  if (typeof content !== 'string' || content.trim().length === 0) {
+    return { error: '投稿内容を入力してください。' };
+  }
+  const trimmedContent = content.trim();
+  if (trimmedContent.length > MAX_CONTENT_LENGTH) {
+    return { error: `投稿内容は${MAX_CONTENT_LENGTH}文字以内で入力してください。` };
+  }
+
+  const trimmedUsername = typeof username === 'string' ? username.trim() : '';
+  if (trimmedUsername.length > MAX_USERNAME_LENGTH) {
+    return { error: `ユーザー名は${MAX_USERNAME_LENGTH}文字以内で入力してください。` };
+  }
+
+  return { username: trimmedUsername || '名無しさん', content: trimmedContent };
+}
+
 app.get('/api/posts', async (req, res) => {
   const ids = await redis.zrange(INDEX_KEY, 0, -1, { rev: true });
   if (ids.length === 0) {
     return res.json([]);
   }
 
+  // 各投稿の返信IDを取得し、本体・いいね数は投稿と返信をまとめて一括で引く
+  const replyIdLists = await Promise.all(ids.map((id) => redis.zrange(replyIndexKey(id), 0, -1)));
+  const allIds = [...ids, ...replyIdLists.flat()];
+
   const [postsData, likesData] = await Promise.all([
-    Promise.all(ids.map((id) => redis.hget(POSTS_KEY, id))),
-    Promise.all(ids.map((id) => redis.hget(LIKES_KEY, id))),
+    Promise.all(allIds.map((id) => redis.hget(POSTS_KEY, id))),
+    Promise.all(allIds.map((id) => redis.hget(LIKES_KEY, id))),
   ]);
 
+  const publicById = new Map(
+    allIds.map((id, i) => [id, postsData[i] ? toPublicPost(postsData[i], likesData[i] || 0) : null])
+  );
+
   const posts = ids
-    .map((id, i) => (postsData[i] ? toPublicPost(postsData[i], likesData[i] || 0) : null))
+    .map((id, i) => {
+      const post = publicById.get(id);
+      if (!post) return null;
+      const replies = replyIdLists[i].map((rid) => publicById.get(rid)).filter(Boolean);
+      return { ...post, replies };
+    })
     .filter(Boolean);
 
   res.json(posts);
 });
 
 app.post('/api/posts', async (req, res) => {
-  const { username, content } = req.body;
-
-  if (typeof content !== 'string' || content.trim().length === 0) {
-    return res.status(400).json({ error: '投稿内容を入力してください。' });
-  }
-  const trimmedContent = content.trim();
-  if (trimmedContent.length > MAX_CONTENT_LENGTH) {
-    return res.status(400).json({ error: `投稿内容は${MAX_CONTENT_LENGTH}文字以内で入力してください。` });
-  }
-
-  const trimmedUsername = typeof username === 'string' ? username.trim() : '';
-  if (trimmedUsername.length > MAX_USERNAME_LENGTH) {
-    return res.status(400).json({ error: `ユーザー名は${MAX_USERNAME_LENGTH}文字以内で入力してください。` });
+  const input = validatePostInput(req.body);
+  if (input.error) {
+    return res.status(400).json({ error: input.error });
   }
 
   const id = crypto.randomUUID();
   const ownerToken = crypto.randomUUID();
   const post = {
     id,
-    username: trimmedUsername || '名無しさん',
-    content: trimmedContent,
+    username: input.username,
+    content: input.content,
     createdAt: Date.now(),
     ownerTokenHash: hashToken(ownerToken),
   };
@@ -85,6 +115,41 @@ app.post('/api/posts', async (req, res) => {
 
   // 削除時の本人確認に使うトークンは、この作成レスポンスでのみ平文で返す
   res.status(201).json({ ...toPublicPost(post, 0), ownerToken });
+});
+
+app.post('/api/posts/:id/replies', async (req, res) => {
+  const parent = await redis.hget(POSTS_KEY, req.params.id);
+  if (!parent) {
+    return res.status(404).json({ error: '返信先の投稿が見つかりません。' });
+  }
+  // スレッドは1段階まで(返信への返信は不可)
+  if (parent.parentId) {
+    return res.status(400).json({ error: '返信に対しては返信できません。' });
+  }
+
+  const input = validatePostInput(req.body);
+  if (input.error) {
+    return res.status(400).json({ error: input.error });
+  }
+
+  const id = crypto.randomUUID();
+  const ownerToken = crypto.randomUUID();
+  const reply = {
+    id,
+    parentId: req.params.id,
+    username: input.username,
+    content: input.content,
+    createdAt: Date.now(),
+    ownerTokenHash: hashToken(ownerToken),
+  };
+
+  await Promise.all([
+    redis.hset(POSTS_KEY, { [id]: reply }),
+    redis.hset(LIKES_KEY, { [id]: 0 }),
+    redis.zadd(replyIndexKey(req.params.id), { score: reply.createdAt, member: id }),
+  ]);
+
+  res.status(201).json({ ...toPublicPost(reply, 0), ownerToken });
 });
 
 app.post('/api/posts/:id/like', async (req, res) => {
@@ -107,11 +172,23 @@ app.delete('/api/posts/:id', async (req, res) => {
     return res.status(403).json({ error: 'この投稿を削除する権限がありません。' });
   }
 
-  await Promise.all([
-    redis.hdel(POSTS_KEY, req.params.id),
-    redis.hdel(LIKES_KEY, req.params.id),
-    redis.zrem(INDEX_KEY, req.params.id),
-  ]);
+  if (post.parentId) {
+    // 返信の削除: 本体・いいね数に加えて、親投稿の返信インデックスからも取り除く
+    await Promise.all([
+      redis.hdel(POSTS_KEY, req.params.id),
+      redis.hdel(LIKES_KEY, req.params.id),
+      redis.zrem(replyIndexKey(post.parentId), req.params.id),
+    ]);
+  } else {
+    // 投稿の削除: ぶら下がっている返信も含めてまとめて消す
+    const replyIds = await redis.zrange(replyIndexKey(req.params.id), 0, -1);
+    await Promise.all([
+      redis.hdel(POSTS_KEY, req.params.id, ...replyIds),
+      redis.hdel(LIKES_KEY, req.params.id, ...replyIds),
+      redis.zrem(INDEX_KEY, req.params.id),
+      redis.del(replyIndexKey(req.params.id)),
+    ]);
+  }
   res.status(204).end();
 });
 
