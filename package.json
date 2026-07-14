@@ -4,9 +4,10 @@
   "description": "簡易SNS投稿WEBアプリ",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node --env-file=.env.local server.js"
   },
   "dependencies": {
+    "@upstash/redis": "^1.38.0",
     "express": "^4.19.2"
   }
 }
