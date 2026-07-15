@@ -8,6 +8,16 @@ const postList = document.getElementById('post-list');
 const MAX_CONTENT_LENGTH = 280;
 const MY_POST_TOKENS_KEY = 'sns-app:myPostTokens';
 const LIKED_POST_IDS_KEY = 'sns-app:likedPostIds';
+const USERNAME_KEY = 'sns-app:username';
+const AUTO_REFRESH_INTERVAL_MS = 30000;
+
+function getSavedUsername() {
+  return localStorage.getItem(USERNAME_KEY) || '';
+}
+
+function saveUsername(username) {
+  localStorage.setItem(USERNAME_KEY, username.trim());
+}
 
 function getMyPostTokens() {
   return JSON.parse(localStorage.getItem(MY_POST_TOKENS_KEY) || '{}');
@@ -35,7 +45,7 @@ function addLikedPostId(id) {
   localStorage.setItem(LIKED_POST_IDS_KEY, JSON.stringify([...ids]));
 }
 
-function formatTime(timestamp) {
+function formatAbsoluteTime(timestamp) {
   const date = new Date(timestamp);
   return date.toLocaleString('ja-JP', {
     year: 'numeric',
@@ -44,6 +54,19 @@ function formatTime(timestamp) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+// SNSらしく「5分前」のような相対表示にする(正確な日時はtitle属性で補う)
+function formatTime(timestamp) {
+  const diffMs = Date.now() - timestamp;
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return 'たった今';
+  if (minutes < 60) return `${minutes}分前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}時間前`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}日前`;
+  return formatAbsoluteTime(timestamp);
 }
 
 function escapeHtml(str) {
@@ -59,7 +82,7 @@ function renderReply(reply, myPostTokens, likedPostIds) {
     <li class="reply-item" data-id="${reply.id}">
       <div class="post-item-header">
         <span class="post-username">${escapeHtml(reply.username)}</span>
-        <span class="post-time">${formatTime(reply.createdAt)}</span>
+        <span class="post-time" title="${formatAbsoluteTime(reply.createdAt)}">${formatTime(reply.createdAt)}</span>
       </div>
       <div class="post-content">${escapeHtml(reply.content)}</div>
       <div class="post-actions">
@@ -90,7 +113,7 @@ function renderPosts(posts) {
         <li class="post-item" data-id="${post.id}">
           <div class="post-item-header">
             <span class="post-username">${escapeHtml(post.username)}</span>
-            <span class="post-time">${formatTime(post.createdAt)}</span>
+            <span class="post-time" title="${formatAbsoluteTime(post.createdAt)}">${formatTime(post.createdAt)}</span>
           </div>
           <div class="post-content">${escapeHtml(post.content)}</div>
           <div class="post-actions">
@@ -127,6 +150,14 @@ function renderPosts(posts) {
       `;
     })
     .join('');
+
+  // 保存済みユーザー名を返信フォームにもあらかじめ入れておく
+  const savedUsername = getSavedUsername();
+  if (savedUsername) {
+    postList.querySelectorAll('.reply-username-input').forEach((input) => {
+      input.value = savedUsername;
+    });
+  }
 }
 
 async function loadPosts() {
@@ -179,6 +210,7 @@ postForm.addEventListener('submit', async (event) => {
     }
 
     addMyPostToken(data.id, data.ownerToken);
+    saveUsername(username);
     contentInput.value = '';
     charCount.textContent = `0 / ${MAX_CONTENT_LENGTH}`;
     await loadPosts();
@@ -270,6 +302,7 @@ postList.addEventListener('submit', async (event) => {
     }
 
     addMyPostToken(data.id, data.ownerToken);
+    saveUsername(username);
     await loadPosts();
   } catch (err) {
     replyError.textContent = '通信エラーが発生しました。';
@@ -279,4 +312,20 @@ postList.addEventListener('submit', async (event) => {
   }
 });
 
+usernameInput.value = getSavedUsername();
 loadPosts();
+
+// 一定間隔でタイムラインを自動更新する。
+// 返信フォームを開いている(入力中かもしれない)間と、タブが非表示の間は書き換えない。
+function refreshIfIdle() {
+  if (document.hidden) return;
+  if (postList.querySelector('.reply-form:not([hidden])')) return;
+  loadPosts().catch(() => {
+    // 自動更新の失敗は次の周期で再試行するだけでよいので、エラー表示はしない
+  });
+}
+
+setInterval(refreshIfIdle, AUTO_REFRESH_INTERVAL_MS);
+
+// 別タブから戻ってきたときはすぐ最新化する
+document.addEventListener('visibilitychange', refreshIfIdle);
