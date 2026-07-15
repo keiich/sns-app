@@ -194,32 +194,36 @@ app.post('/api/posts/:id/replies', async (req, res) => {
   if (!parent) {
     return res.status(404).json({ error: '返信先の投稿が見つかりません。' });
   }
-  // スレッドは1段階まで(返信への返信は不可)
-  if (parent.parentId) {
-    return res.status(400).json({ error: '返信に対しては返信できません。' });
-  }
 
   const input = validatePostInput(req.body);
   if (input.error) {
     return res.status(400).json({ error: input.error });
   }
 
+  // 返信への返信も可能。ネストは深くせず、すべて大元の投稿(root)のスレッドに
+  // フラットにぶら下げる(インデックスはrootのIDで一本化)。
+  // 古いデータにはrootIdがないため、その場合はparentIdが大元の投稿を指している。
+  const rootId = parent.parentId ? parent.rootId || parent.parentId : parent.id;
+
   const id = crypto.randomUUID();
   const ownerToken = crypto.randomUUID();
   const reply = {
     id,
     parentId: req.params.id,
+    rootId,
     username: input.username,
     content: input.content,
     createdAt: Date.now(),
     ownerTokenHash: hashToken(ownerToken),
+    // 返信への返信の場合だけ、誰宛てかを表示用に記録する(宛先が後で削除されても表示できるよう名前を保存)
+    ...(parent.parentId ? { replyToUsername: parent.username } : {}),
   };
 
   await Promise.all([
     redis.hset(POSTS_KEY, { [id]: reply }),
     redis.hset(LIKES_KEY, { [id]: 0 }),
     redis.hset(SHARES_KEY, { [id]: 0 }),
-    redis.zadd(replyIndexKey(req.params.id), { score: reply.createdAt, member: id }),
+    redis.zadd(replyIndexKey(rootId), { score: reply.createdAt, member: id }),
   ]);
 
   res.status(201).json({ ...toPublicPost(reply, 0, 0), ownerToken });
@@ -277,12 +281,13 @@ app.delete('/api/posts/:id', async (req, res) => {
   }
 
   if (post.parentId) {
-    // 返信の削除: 本体・いいね数・共有数に加えて、親投稿の返信インデックスからも取り除く
+    // 返信の削除: 本体・いいね数・共有数に加えて、大元の投稿の返信インデックスからも取り除く
+    // (rootIdを持たない古いデータはparentIdが大元の投稿)
     await Promise.all([
       redis.hdel(POSTS_KEY, req.params.id),
       redis.hdel(LIKES_KEY, req.params.id),
       redis.hdel(SHARES_KEY, req.params.id),
-      redis.zrem(replyIndexKey(post.parentId), req.params.id),
+      redis.zrem(replyIndexKey(post.rootId || post.parentId), req.params.id),
     ]);
   } else {
     // 投稿の削除: ぶら下がっている返信も含めてまとめて消す

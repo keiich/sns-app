@@ -332,6 +332,42 @@ button:disabled {
   font-weight: bold;
 }
 
+/* 返信への返信に付く「↳ 〇〇さんへの返信」ラベル */
+.reply-to-label {
+  font-size: 12px;
+  color: var(--subtext);
+}
+
+/* 返信フォーム上部の「〇〇さんに返信」表示 */
+.replying-to {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: bold;
+}
+
+.replying-to .cancel-reply-to {
+  background: none;
+  border: none;
+  color: var(--subtext);
+  font-size: 14px;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: 999px;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.replying-to .cancel-reply-to:hover {
+  background: var(--border);
+  color: var(--text);
+  transform: none;
+  box-shadow: none;
+}
+
 .reply-form {
   margin-top: 10px;
   padding: 12px;
