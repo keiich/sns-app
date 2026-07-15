@@ -1,9 +1,12 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 const { Redis } = require('@upstash/redis');
 
 const app = express();
+// Vercelのプロキシ背後でreq.protocolがhttpsになるようにする(OGPの絶対URL生成に必要)
+app.set('trust proxy', true);
 const PORT = process.env.PORT || 3000;
 const MAX_CONTENT_LENGTH = 280;
 const MAX_USERNAME_LENGTH = 30;
@@ -28,6 +31,72 @@ const redis = new Redis({
 });
 
 app.use(express.json());
+
+const INDEX_HTML = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+
+// サーバー側でHTMLに埋め込む文字列のエスケープ(属性値にも使うためクォートも対象)
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function absoluteBase(req) {
+  return `${req.protocol}://${req.get('host')}`;
+}
+
+// og:image / og:url は絶対URLが必須で、デプロイ先ドメインは実行時にしか分からないため、
+// トップページは静的配信ではなくリクエストのホスト名を使って埋め込んで返す
+app.get('/', (req, res) => {
+  const base = absoluteBase(req);
+  const injected = INDEX_HTML.replace(
+    '<link rel="icon"',
+    `<meta property="og:url" content="${base}/" />\n<meta property="og:image" content="${base}/icon.png" />\n<link rel="icon"`
+  );
+  res.type('html').send(injected);
+});
+
+// 投稿ごとのシェア用パーマリンク。XなどのクローラーはJSを実行せず
+// サーバーが返すHTMLのOGPタグだけを読むため、ここで投稿内容を埋め込んで返し、
+// ブラウザで開いた人はタイムライン上の該当投稿へリダイレクトする。
+app.get('/post/:id', async (req, res) => {
+  const post = await redis.hget(POSTS_KEY, req.params.id);
+  if (!post) {
+    return res.redirect('/');
+  }
+
+  const base = absoluteBase(req);
+  // 返信へのリンクは親投稿のスレッドにフォーカスさせる
+  const focusId = post.parentId || post.id;
+  const title = `${post.username}さんの投稿 | ぷちSNS`;
+  // サロゲートペア(絵文字など)を壊さないようコードポイント単位で切り詰める
+  const chars = [...post.content];
+  const description = chars.length > 100 ? `${chars.slice(0, 99).join('')}…` : post.content;
+
+  res.type('html').send(`<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>${escapeHtml(title)}</title>
+<meta name="description" content="${escapeHtml(description)}" />
+<meta property="og:type" content="article" />
+<meta property="og:site_name" content="ぷちSNS" />
+<meta property="og:title" content="${escapeHtml(title)}" />
+<meta property="og:description" content="${escapeHtml(description)}" />
+<meta property="og:url" content="${base}/post/${escapeHtml(post.id)}" />
+<meta property="og:image" content="${base}/icon.png" />
+<meta name="twitter:card" content="summary" />
+<meta http-equiv="refresh" content="0;url=/?post=${encodeURIComponent(focusId)}" />
+</head>
+<body>
+<p><a href="/?post=${encodeURIComponent(focusId)}">投稿へ移動しています…</a></p>
+</body>
+</html>`);
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 function hashToken(token) {

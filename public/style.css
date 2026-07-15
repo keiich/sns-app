@@ -184,6 +184,11 @@ button:disabled {
   color: var(--danger);
 }
 
+.post-item.focused {
+  background: rgba(29, 155, 240, 0.08);
+  border-left: 3px solid var(--accent);
+}
+
 .reply-list {
   list-style: none;
   margin: 8px 0 0;

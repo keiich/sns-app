@@ -123,6 +123,7 @@ function renderPosts(posts) {
             <button class="icon-button reply-button" data-action="reply">
               💬 返信${replies.length > 0 ? ` <span class="reply-count">${replies.length}</span>` : ''}
             </button>
+            <button class="icon-button share-button" data-action="share">🔗 共有</button>
             ${isMine ? '<button class="icon-button delete-button" data-action="delete">削除</button>' : ''}
           </div>
           ${replies.length > 0 ? `<ul class="reply-list">${replies.map((r) => renderReply(r, myPostTokens, likedPostIds)).join('')}</ul>` : ''}
@@ -160,10 +161,24 @@ function renderPosts(posts) {
   }
 }
 
+// シェアリンク(/post/:id → /?post=<id>)から来た場合に、該当投稿へスクロールしてハイライトする
+const focusPostId = new URLSearchParams(location.search).get('post');
+let hasFocusedSharedPost = false;
+
+function focusSharedPost() {
+  if (!focusPostId || hasFocusedSharedPost) return;
+  const item = postList.querySelector(`.post-item[data-id="${CSS.escape(focusPostId)}"]`);
+  if (!item) return;
+  hasFocusedSharedPost = true;
+  item.classList.add('focused');
+  item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 async function loadPosts() {
   const res = await fetch('/api/posts');
   const posts = await res.json();
   renderPosts(posts);
+  focusSharedPost();
 }
 
 function showError(message) {
@@ -235,6 +250,27 @@ postList.addEventListener('click', async (event) => {
     form.hidden = !form.hidden;
     if (!form.hidden) {
       form.querySelector('.reply-content-input').focus();
+    }
+  } else if (action === 'share') {
+    const shareUrl = `${location.origin}/post/${id}`;
+    if (navigator.share) {
+      // モバイルではOSの共有シート(Xアプリなどに直接渡せる)を優先する
+      try {
+        await navigator.share({ title: 'ぷちSNS', url: shareUrl });
+      } catch (err) {
+        // 共有シートを閉じただけの場合もhere。何もしない
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        const originalHtml = button.innerHTML;
+        button.innerHTML = 'コピーしました！';
+        setTimeout(() => {
+          button.innerHTML = originalHtml;
+        }, 1500);
+      } catch (err) {
+        prompt('このリンクをコピーしてください', shareUrl);
+      }
     }
   } else if (action === 'like') {
     // 連打で複数回いいねを送れないよう、応答を待つ前にボタンを無効化する
