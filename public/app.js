@@ -4,6 +4,11 @@ const contentInput = document.getElementById('content-input');
 const charCount = document.getElementById('char-count');
 const errorMessage = document.getElementById('error-message');
 const postList = document.getElementById('post-list');
+const topicDateEl = document.getElementById('topic-date');
+const topicTextEl = document.getElementById('topic-text');
+const archiveNotice = document.getElementById('archive-notice');
+const prevDayLink = document.getElementById('prev-day');
+const nextDayLink = document.getElementById('next-day');
 
 const MAX_CONTENT_LENGTH = 280;
 const MY_POST_TOKENS_KEY = 'sns-app:myPostTokens';
@@ -122,7 +127,9 @@ function renderPosts(posts, animate = false) {
   postList.classList.toggle('animate', animate);
 
   if (posts.length === 0) {
-    postList.innerHTML = '<li class="empty-state">まだ投稿がありません。最初の投稿をしてみましょう！</li>';
+    postList.innerHTML = `<li class="empty-state">${
+      currentIsToday ? 'まだ回答がありません。最初のボケをどうぞ！' : 'この日の回答はありません。'
+    }</li>`;
     return;
   }
 
@@ -188,8 +195,43 @@ function renderPosts(posts, animate = false) {
   }
 }
 
+// ---- 日替わりお題 ----
+const urlParams = new URLSearchParams(location.search);
+const viewDate = urlParams.get('date');
+// 表示中の日が「今日」かどうか。アーカイブ表示では投稿フォームと自動更新を止める
+let currentIsToday = true;
+
+function jstToday() {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function shiftDate(dateStr, days) {
+  return new Date(Date.parse(`${dateStr}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
+}
+
+function formatTopicDate(dateStr) {
+  const [, m, d] = dateStr.split('-').map(Number);
+  return `${m}月${d}日`;
+}
+
+function renderTopic(data) {
+  currentIsToday = data.isToday;
+  topicDateEl.textContent = data.isToday
+    ? `今日のお題（${formatTopicDate(data.date)}）`
+    : `${formatTopicDate(data.date)}のお題`;
+  topicTextEl.textContent = data.topic;
+
+  prevDayLink.href = `/?date=${shiftDate(data.date, -1)}`;
+  const next = shiftDate(data.date, 1);
+  nextDayLink.href = next >= jstToday() ? '/' : `/?date=${next}`;
+  nextDayLink.hidden = data.isToday;
+
+  archiveNotice.hidden = data.isToday;
+  postForm.hidden = !data.isToday;
+}
+
 // シェアリンク(/post/:id → /?post=<id>)から来た場合に、該当投稿へスクロールしてハイライトする
-const focusPostId = new URLSearchParams(location.search).get('post');
+const focusPostId = urlParams.get('post');
 let hasFocusedSharedPost = false;
 
 function focusSharedPost() {
@@ -203,9 +245,10 @@ function focusSharedPost() {
 }
 
 async function loadPosts(animate = false) {
-  const res = await fetch('/api/posts');
-  const posts = await res.json();
-  renderPosts(posts, animate);
+  const res = await fetch(`/api/posts${viewDate ? `?date=${encodeURIComponent(viewDate)}` : ''}`);
+  const data = await res.json();
+  renderTopic(data);
+  renderPosts(data.posts, animate);
   focusSharedPost();
 }
 
@@ -476,6 +519,7 @@ loadPosts(true);
 // 返信フォームを開いている(入力中かもしれない)間と、タブが非表示の間は書き換えない。
 function refreshIfIdle() {
   if (document.hidden) return;
+  if (!currentIsToday) return; // アーカイブ表示中は更新不要
   if (postList.querySelector('.reply-form:not([hidden])')) return;
   loadPosts().catch(() => {
     // 自動更新の失敗は次の周期で再試行するだけでよいので、エラー表示はしない

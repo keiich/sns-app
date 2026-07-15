@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { Redis } = require('@upstash/redis');
+const TOPICS = require('./topics');
 
 const app = express();
 // Vercelのプロキシ背後でreq.protocolがhttpsになるようにする(OGPの絶対URL生成に必要)
@@ -24,6 +25,41 @@ const REPLIES_INDEX_PREFIX = 'sns:replies:';
 
 function replyIndexKey(postId) {
   return `${REPLIES_INDEX_PREFIX}${postId}`;
+}
+
+// ---- 日替わりお題(日本時間の0時に切り替わる) ----
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function jstDateString(ts) {
+  return new Date(ts + JST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function isValidDateString(s) {
+  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`));
+}
+
+// そのJST日付が始まるUTCタイムスタンプ
+function jstDayStartUtc(dateStr) {
+  return Date.parse(`${dateStr}T00:00:00Z`) - JST_OFFSET_MS;
+}
+
+function topicForDate(dateStr) {
+  const dayNumber = Math.floor(Date.parse(`${dateStr}T00:00:00Z`) / DAY_MS);
+  return TOPICS[((dayNumber % TOPICS.length) + TOPICS.length) % TOPICS.length];
+}
+
+// クエリの日付を検証し、未来日は今日に丸める(未来のお題を先に見せない)
+function resolveViewDate(queryDate) {
+  const today = jstDateString(Date.now());
+  let date = isValidDateString(queryDate) ? queryDate : today;
+  if (date > today) date = today;
+  return { date, today, isToday: date === today };
+}
+
+function formatJpDate(dateStr) {
+  const [, m, d] = dateStr.split('-').map(Number);
+  return `${m}月${d}日`;
 }
 
 const redis = new Redis({
@@ -50,13 +86,29 @@ function absoluteBase(req) {
 }
 
 // og:image / og:url は絶対URLが必須で、デプロイ先ドメインは実行時にしか分からないため、
-// トップページは静的配信ではなくリクエストのホスト名を使って埋め込んで返す
+// トップページは静的配信ではなくリクエストのホスト名を使って埋め込んで返す。
+// タイトルと説明文には表示日のお題を入れる(シェア時のカードと検索流入のため)。
 app.get('/', (req, res) => {
   const base = absoluteBase(req);
-  const injected = INDEX_HTML.replace(
-    '<link rel="icon"',
-    `<meta property="og:url" content="${base}/" />\n<meta property="og:image" content="${base}/icon.png" />\n<link rel="icon"`
-  );
+  const { date, isToday } = resolveViewDate(req.query.date);
+  const topic = topicForDate(date);
+  const title = isToday
+    ? `ぷちSNS｜今日のお題「${topic}」`
+    : `${formatJpDate(date)}のお題「${topic}」｜ぷちSNS`;
+  const description = `お題「${topic}」に匿名で一言。毎日0時に新しいお題が出る、登録不要の大喜利SNS。`;
+  const pageUrl = isToday ? `${base}/` : `${base}/?date=${date}`;
+
+  const injected = INDEX_HTML
+    .replace('<title>ぷちSNS</title>', `<title>${escapeHtml(title)}</title>`)
+    .replace(
+      '<meta property="og:title" content="ぷちSNS" />',
+      `<meta property="og:title" content="${escapeHtml(title)}" />`
+    )
+    .replaceAll('登録不要で気軽につぶやける小さなSNS。いいねや返信もできます。', escapeHtml(description))
+    .replace(
+      '<link rel="icon"',
+      `<meta property="og:url" content="${pageUrl}" />\n<meta property="og:image" content="${base}/icon.png" />\n<link rel="icon"`
+    );
   res.type('html').send(injected);
 });
 
@@ -72,6 +124,12 @@ app.get('/post/:id', async (req, res) => {
   const base = absoluteBase(req);
   // 返信も自分自身にフォーカスさせる(タイムライン上で該当の返信がハイライトされる)
   const focusId = post.id;
+  // 日別フィードになったため、スレッドが属する日(大元の投稿の作成日)を開く必要がある
+  let rootPost = post;
+  if (post.parentId) {
+    rootPost = (await redis.hget(POSTS_KEY, post.rootId || post.parentId)) || post;
+  }
+  const threadDate = jstDateString(rootPost.createdAt);
   const title = `${post.username}さんの${post.parentId ? '返信' : '投稿'} | ぷちSNS`;
   // サロゲートペア(絵文字など)を壊さないようコードポイント単位で切り詰める
   const chars = [...post.content];
@@ -90,10 +148,10 @@ app.get('/post/:id', async (req, res) => {
 <meta property="og:url" content="${base}/post/${escapeHtml(post.id)}" />
 <meta property="og:image" content="${base}/icon.png" />
 <meta name="twitter:card" content="summary" />
-<meta http-equiv="refresh" content="0;url=/?post=${encodeURIComponent(focusId)}" />
+<meta http-equiv="refresh" content="0;url=/?date=${threadDate}&post=${encodeURIComponent(focusId)}" />
 </head>
 <body>
-<p><a href="/?post=${encodeURIComponent(focusId)}">投稿へ移動しています…</a></p>
+<p><a href="/?date=${threadDate}&post=${encodeURIComponent(focusId)}">投稿へ移動しています…</a></p>
 </body>
 </html>`);
 });
@@ -156,9 +214,14 @@ function validatePostInput(body) {
 }
 
 app.get('/api/posts', async (req, res) => {
-  const ids = await redis.zrange(INDEX_KEY, 0, -1, { rev: true });
+  const { date, isToday } = resolveViewDate(req.query.date);
+  const dayStart = jstDayStartUtc(date);
+  const view = { date, topic: topicForDate(date), isToday };
+
+  // その日(JST)に作られた投稿だけをスコア(createdAt)で絞り込み、新しい順に返す
+  const ids = (await redis.zrange(INDEX_KEY, dayStart, dayStart + DAY_MS - 1, { byScore: true })).reverse();
   if (ids.length === 0) {
-    return res.json([]);
+    return res.json({ ...view, posts: [] });
   }
 
   // 各投稿の返信IDを取得し、本体・いいね数は投稿と返信をまとめて一括で引く
@@ -184,7 +247,7 @@ app.get('/api/posts', async (req, res) => {
     })
     .filter(Boolean);
 
-  res.json(posts);
+  res.json({ ...view, posts });
 });
 
 app.post('/api/posts', async (req, res) => {
