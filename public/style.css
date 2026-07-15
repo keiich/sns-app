@@ -184,9 +184,15 @@ button:disabled {
   color: var(--danger);
 }
 
-.post-item.focused {
+.post-item.focused,
+.reply-item.focused {
   background: rgba(29, 155, 240, 0.08);
   border-left: 3px solid var(--accent);
+}
+
+.reply-item.focused {
+  padding-left: 8px;
+  border-radius: 4px;
 }
 
 .reply-list {

@@ -69,9 +69,9 @@ app.get('/post/:id', async (req, res) => {
   }
 
   const base = absoluteBase(req);
-  // 返信へのリンクは親投稿のスレッドにフォーカスさせる
-  const focusId = post.parentId || post.id;
-  const title = `${post.username}さんの投稿 | ぷちSNS`;
+  // 返信も自分自身にフォーカスさせる(タイムライン上で該当の返信がハイライトされる)
+  const focusId = post.id;
+  const title = `${post.username}さんの${post.parentId ? '返信' : '投稿'} | ぷちSNS`;
   // サロゲートペア(絵文字など)を壊さないようコードポイント単位で切り詰める
   const chars = [...post.content];
   const description = chars.length > 100 ? `${chars.slice(0, 99).join('')}…` : post.content;

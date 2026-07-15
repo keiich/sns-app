@@ -89,6 +89,7 @@ function renderReply(reply, myPostTokens, likedPostIds) {
         <button class="icon-button like-button ${isLiked ? 'liked' : ''}" data-action="like" ${isLiked ? 'disabled' : ''}>
           ♥ <span class="like-count">${reply.likes}</span>
         </button>
+        <button class="icon-button share-button" data-action="share">🔗 共有</button>
         ${isMine ? '<button class="icon-button delete-button" data-action="delete">削除</button>' : ''}
       </div>
     </li>
@@ -167,7 +168,8 @@ let hasFocusedSharedPost = false;
 
 function focusSharedPost() {
   if (!focusPostId || hasFocusedSharedPost) return;
-  const item = postList.querySelector(`.post-item[data-id="${CSS.escape(focusPostId)}"]`);
+  // 投稿だけでなく返信(reply-item)もシェアリンクの対象になる
+  const item = postList.querySelector(`[data-id="${CSS.escape(focusPostId)}"]`);
   if (!item) return;
   hasFocusedSharedPost = true;
   item.classList.add('focused');
