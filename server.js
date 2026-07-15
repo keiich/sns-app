@@ -3,7 +3,6 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { Redis } = require('@upstash/redis');
-const TOPICS = require('./topics');
 
 const app = express();
 // Vercelのプロキシ背後でreq.protocolがhttpsになるようにする(OGPの絶対URL生成に必要)
@@ -11,6 +10,9 @@ app.set('trust proxy', true);
 const PORT = process.env.PORT || 3000;
 const MAX_CONTENT_LENGTH = 280;
 const MAX_USERNAME_LENGTH = 30;
+// 「今日やること」リストの上限(1投稿あたりの項目数と、1項目の文字数)
+const MAX_TASKS = 10;
+const MAX_TASK_LENGTH = 60;
 
 // 投稿本体はハッシュ(id -> post)、いいね数は別ハッシュ(id -> count)、
 // 一覧の並び順はソート済みセット(member=id, score=createdAt)で管理する。
@@ -44,12 +46,7 @@ function jstDayStartUtc(dateStr) {
   return Date.parse(`${dateStr}T00:00:00Z`) - JST_OFFSET_MS;
 }
 
-function topicForDate(dateStr) {
-  const dayNumber = Math.floor(Date.parse(`${dateStr}T00:00:00Z`) / DAY_MS);
-  return TOPICS[((dayNumber % TOPICS.length) + TOPICS.length) % TOPICS.length];
-}
-
-// クエリの日付を検証し、未来日は今日に丸める(未来のお題を先に見せない)
+// クエリの日付を検証し、未来日は今日に丸める
 function resolveViewDate(queryDate) {
   const today = jstDateString(Date.now());
   let date = isValidDateString(queryDate) ? queryDate : today;
@@ -91,11 +88,9 @@ function absoluteBase(req) {
 app.get('/', (req, res) => {
   const base = absoluteBase(req);
   const { date, isToday } = resolveViewDate(req.query.date);
-  const topic = topicForDate(date);
   const title = isToday
-    ? `ぷちSNS｜今日のお題「${topic}」`
-    : `${formatJpDate(date)}のお題「${topic}」｜ぷちSNS`;
-  const description = `お題「${topic}」に匿名で一言。毎日0時に新しいお題が出る、登録不要の大喜利SNS。`;
+    ? 'ぷちSNS｜今日やることをみんなで宣言・達成するSNS'
+    : `${formatJpDate(date)}のみんなの宣言｜ぷちSNS`;
   const pageUrl = isToday ? `${base}/` : `${base}/?date=${date}`;
 
   const injected = INDEX_HTML
@@ -104,7 +99,6 @@ app.get('/', (req, res) => {
       '<meta property="og:title" content="ぷちSNS" />',
       `<meta property="og:title" content="${escapeHtml(title)}" />`
     )
-    .replaceAll('登録不要で気軽につぶやける小さなSNS。いいねや返信もできます。', escapeHtml(description))
     .replace(
       '<link rel="icon"',
       `<meta property="og:url" content="${pageUrl}" />\n<meta property="og:image" content="${base}/icon.png" />\n<link rel="icon"`
@@ -130,10 +124,14 @@ app.get('/post/:id', async (req, res) => {
     rootPost = (await redis.hget(POSTS_KEY, post.rootId || post.parentId)) || post;
   }
   const threadDate = jstDateString(rootPost.createdAt);
-  const title = `${post.username}さんの${post.parentId ? '返信' : '投稿'} | ぷちSNS`;
+  const title = `${post.username}さんの${post.parentId ? '返信' : '今日やること'} | ぷちSNS`;
+  // 投稿はやることリストの要約、返信は本文をそのまま説明文にする
+  const rawDescription = Array.isArray(post.tasks)
+    ? `【${post.tasks.filter((t) => t.done).length}/${post.tasks.length} 達成】${post.tasks.map((t) => t.text).join(' / ')}`
+    : post.content;
   // サロゲートペア(絵文字など)を壊さないようコードポイント単位で切り詰める
-  const chars = [...post.content];
-  const description = chars.length > 100 ? `${chars.slice(0, 99).join('')}…` : post.content;
+  const chars = [...rawDescription];
+  const description = chars.length > 100 ? `${chars.slice(0, 99).join('')}…` : rawDescription;
 
   res.type('html').send(`<!DOCTYPE html>
 <html lang="ja">
@@ -179,26 +177,15 @@ function toPublicPost(post, likes, shares) {
   return { ...publicPost, likes: likes || 0, shares: shares || 0 };
 }
 
-// 投稿と返信で共通の入力チェック。エラー時は { error }、成功時は { username, trip, content } を返す
-function validatePostInput(body) {
-  const { username, content } = body;
-
-  if (typeof content !== 'string' || content.trim().length === 0) {
-    return { error: '投稿内容を入力してください。' };
-  }
-  const trimmedContent = content.trim();
-  if (trimmedContent.length > MAX_CONTENT_LENGTH) {
-    return { error: `投稿内容は${MAX_CONTENT_LENGTH}文字以内で入力してください。` };
-  }
-
-  // 「名前#合言葉」形式ならトリップを生成する(合言葉自体は保存しない)
-  const rawUsername = typeof username === 'string' ? username : '';
-  const hashIndex = rawUsername.indexOf('#');
-  let namePart = rawUsername;
+// 名前欄の共通処理。「名前#合言葉」形式ならトリップを生成する(合言葉自体は保存しない)
+function parseUsernameField(rawInput) {
+  const raw = typeof rawInput === 'string' ? rawInput : '';
+  const hashIndex = raw.indexOf('#');
+  let namePart = raw;
   let trip = null;
   if (hashIndex !== -1) {
-    const secret = rawUsername.slice(hashIndex + 1);
-    namePart = rawUsername.slice(0, hashIndex);
+    const secret = raw.slice(hashIndex + 1);
+    namePart = raw.slice(0, hashIndex);
     if (secret.length > 0) {
       trip = generateTrip(secret);
     }
@@ -210,13 +197,60 @@ function validatePostInput(body) {
     return { error: `ユーザー名は${MAX_USERNAME_LENGTH}文字以内で入力してください。` };
   }
 
-  return { username: trimmedUsername || '名無しさん', trip, content: trimmedContent };
+  return { username: trimmedUsername || '名無しさん', trip };
+}
+
+// 返信(相談・応援コメント)の入力チェック
+function validateReplyInput(body) {
+  const parsed = parseUsernameField(body.username);
+  if (parsed.error) {
+    return parsed;
+  }
+
+  const { content } = body;
+  if (typeof content !== 'string' || content.trim().length === 0) {
+    return { error: 'コメントを入力してください。' };
+  }
+  const trimmedContent = content.trim();
+  if (trimmedContent.length > MAX_CONTENT_LENGTH) {
+    return { error: `コメントは${MAX_CONTENT_LENGTH}文字以内で入力してください。` };
+  }
+
+  return { ...parsed, content: trimmedContent };
+}
+
+// 投稿(今日やることリスト)の入力チェック。1行=1項目に分解する
+function validateTasksInput(body) {
+  const parsed = parseUsernameField(body.username);
+  if (parsed.error) {
+    return parsed;
+  }
+
+  const { content } = body;
+  if (typeof content !== 'string' || content.trim().length === 0) {
+    return { error: '今日やることを入力してください。' };
+  }
+  const lines = content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (lines.length === 0) {
+    return { error: '今日やることを入力してください。' };
+  }
+  if (lines.length > MAX_TASKS) {
+    return { error: `やることは${MAX_TASKS}個以内にしてください。` };
+  }
+  if (lines.some((line) => line.length > MAX_TASK_LENGTH)) {
+    return { error: `各項目は${MAX_TASK_LENGTH}文字以内で入力してください。` };
+  }
+
+  return { ...parsed, tasks: lines.map((text) => ({ text, done: false })) };
 }
 
 app.get('/api/posts', async (req, res) => {
   const { date, isToday } = resolveViewDate(req.query.date);
   const dayStart = jstDayStartUtc(date);
-  const view = { date, topic: topicForDate(date), isToday };
+  const view = { date, isToday };
 
   // その日(JST)に作られた投稿だけをスコア(createdAt)で絞り込み、新しい順に返す
   const ids = (await redis.zrange(INDEX_KEY, dayStart, dayStart + DAY_MS - 1, { byScore: true })).reverse();
@@ -251,7 +285,7 @@ app.get('/api/posts', async (req, res) => {
 });
 
 app.post('/api/posts', async (req, res) => {
-  const input = validatePostInput(req.body);
+  const input = validateTasksInput(req.body);
   if (input.error) {
     return res.status(400).json({ error: input.error });
   }
@@ -262,7 +296,7 @@ app.post('/api/posts', async (req, res) => {
     id,
     username: input.username,
     ...(input.trip ? { trip: input.trip } : {}),
-    content: input.content,
+    tasks: input.tasks,
     createdAt: Date.now(),
     ownerTokenHash: hashToken(ownerToken),
   };
@@ -284,7 +318,7 @@ app.post('/api/posts/:id/replies', async (req, res) => {
     return res.status(404).json({ error: '返信先の投稿が見つかりません。' });
   }
 
-  const input = validatePostInput(req.body);
+  const input = validateReplyInput(req.body);
   if (input.error) {
     return res.status(400).json({ error: input.error });
   }
@@ -317,6 +351,34 @@ app.post('/api/posts/:id/replies', async (req, res) => {
   ]);
 
   res.status(201).json({ ...toPublicPost(reply, 0, 0), ownerToken });
+});
+
+// やることのチェックON/OFF。投稿した本人(オーナートークン保持者)だけが押せる
+app.patch('/api/posts/:id/tasks/:index', async (req, res) => {
+  const post = await redis.hget(POSTS_KEY, req.params.id);
+  if (!post || !Array.isArray(post.tasks)) {
+    return res.status(404).json({ error: '投稿が見つかりません。' });
+  }
+
+  const ownerToken = req.get('X-Owner-Token') || '';
+  if (!post.ownerTokenHash || hashToken(ownerToken) !== post.ownerTokenHash) {
+    return res.status(403).json({ error: 'チェックできるのは投稿した本人だけです。' });
+  }
+
+  const index = Number(req.params.index);
+  if (!Number.isInteger(index) || index < 0 || index >= post.tasks.length) {
+    return res.status(400).json({ error: '項目が見つかりません。' });
+  }
+
+  const done = req.body && typeof req.body.done === 'boolean' ? req.body.done : !post.tasks[index].done;
+  post.tasks[index].done = done;
+  await redis.hset(POSTS_KEY, { [req.params.id]: post });
+
+  const [likes, shares] = await Promise.all([
+    redis.hget(LIKES_KEY, req.params.id),
+    redis.hget(SHARES_KEY, req.params.id),
+  ]);
+  res.json(toPublicPost(post, likes, shares));
 });
 
 app.post('/api/posts/:id/like', async (req, res) => {
