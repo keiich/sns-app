@@ -1,22 +1,31 @@
 :root {
   color-scheme: light dark;
-  --bg: #f5f7fa;
+  --bg: #eef2f7;
   --card-bg: #ffffff;
-  --text: #14171a;
-  --subtext: #657786;
-  --border: #e1e8ed;
+  --text: #0f1419;
+  --subtext: #64748b;
+  --border: #e2e8f0;
   --accent: #1d9bf0;
   --accent-hover: #1a8cd8;
-  --danger: #e0245e;
+  --accent-2: #7c5cff;
+  --danger: #ef2d6a;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 16px rgba(15, 23, 42, 0.06);
+  --shadow-hover: 0 2px 4px rgba(15, 23, 42, 0.08), 0 8px 24px rgba(15, 23, 42, 0.1);
+  --like-tint: rgba(239, 45, 106, 0.12);
+  --accent-tint: rgba(29, 155, 240, 0.12);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #15202b;
-    --card-bg: #1e2732;
-    --text: #f5f8fa;
-    --subtext: #8899a6;
-    --border: #38444d;
+    --bg: #0f1722;
+    --card-bg: #1b2531;
+    --text: #f1f5f9;
+    --subtext: #8fa3b8;
+    --border: #2b3a4a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.35);
+    --shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.45);
+    --like-tint: rgba(239, 45, 106, 0.18);
+    --accent-tint: rgba(29, 155, 240, 0.18);
   }
 }
 
@@ -35,48 +44,63 @@ body {
   max-width: 600px;
   margin: 0 auto;
   min-height: 100vh;
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
-  background: var(--bg);
+  padding-bottom: 48px;
 }
 
 .app-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
+  padding: 14px 20px;
   position: sticky;
   top: 0;
-  background: var(--bg);
   z-index: 10;
+  /* 半透明+ぼかしで、下をスクロールする投稿がうっすら透ける */
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
 }
 
 .app-header h1 {
   margin: 0;
-  font-size: 20px;
+  font-size: 22px;
+  letter-spacing: 0.02em;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  width: fit-content;
 }
 
 .post-form {
-  padding: 16px 20px;
-  border-bottom: 8px solid var(--border);
+  margin: 16px;
+  padding: 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
 }
 
 .post-form input,
 .post-form textarea {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 10px 12px;
   font-size: 15px;
   font-family: inherit;
-  background: var(--card-bg);
+  background: var(--bg);
   color: var(--text);
   margin-bottom: 10px;
   resize: vertical;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .post-form input:focus,
-.post-form textarea:focus {
+.post-form textarea:focus,
+.reply-form input:focus,
+.reply-form textarea:focus {
   outline: none;
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
 }
 
 .post-form-footer {
@@ -88,27 +112,45 @@ body {
 .char-count {
   font-size: 13px;
   color: var(--subtext);
+  transition: color 0.15s ease;
+}
+
+.char-count.warn {
+  color: var(--danger);
+  font-weight: bold;
 }
 
 button {
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color: #fff;
   border: none;
   border-radius: 999px;
-  padding: 8px 20px;
+  padding: 9px 22px;
   font-size: 15px;
   font-weight: bold;
+  font-family: inherit;
   cursor: pointer;
-  transition: background 0.15s ease;
+  box-shadow: 0 2px 8px var(--accent-tint);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
 }
 
 button:hover {
-  background: var(--accent-hover);
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px var(--accent-tint);
+}
+
+button:active {
+  transform: scale(0.96);
 }
 
 button:disabled {
   background: var(--border);
+  color: var(--subtext);
   cursor: not-allowed;
+  box-shadow: none;
+  filter: none;
+  transform: none;
 }
 
 .error-message {
@@ -120,15 +162,40 @@ button:disabled {
 .post-list {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 16px;
 }
 
 .post-item {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
+  padding: 16px;
+  margin-bottom: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
   gap: 6px;
+  transition: box-shadow 0.2s ease, transform 0.25s ease, opacity 0.25s ease;
+}
+
+.post-item:hover {
+  box-shadow: var(--shadow-hover);
+}
+
+/* 初回表示時に下からふわっと現れる(再描画のたびに動くとうるさいのでanimateクラス付きのときだけ) */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.post-list.animate .post-item {
+  animation: rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .post-item-header {
@@ -149,13 +216,13 @@ button:disabled {
 .post-content {
   white-space: pre-wrap;
   word-break: break-word;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .post-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   margin-top: 4px;
 }
 
@@ -165,34 +232,76 @@ button:disabled {
   color: var(--subtext);
   cursor: pointer;
   font-size: 14px;
-  padding: 4px 8px;
-  border-radius: 6px;
+  font-weight: normal;
+  padding: 5px 10px;
+  border-radius: 999px;
   display: flex;
   align-items: center;
   gap: 4px;
+  box-shadow: none;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
 .icon-button:hover {
-  background: var(--border);
+  transform: none;
+  filter: none;
+  box-shadow: none;
+  background: var(--accent-tint);
+  color: var(--accent);
 }
 
-.icon-button.like-button.liked {
+.icon-button:active {
+  transform: scale(0.88);
+}
+
+.icon-button:disabled {
+  background: none;
+  color: var(--subtext);
+}
+
+.icon-button.like-button:hover {
+  background: var(--like-tint);
   color: var(--danger);
+}
+
+.icon-button.like-button.liked,
+.icon-button.like-button.liked:disabled {
+  color: var(--danger);
+}
+
+/* いいねした瞬間にポンッと弾む */
+@keyframes like-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.icon-button.like-button.pop {
+  animation: like-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .icon-button.delete-button:hover {
+  background: var(--like-tint);
   color: var(--danger);
 }
 
-.post-item.focused,
-.reply-item.focused {
-  background: rgba(29, 155, 240, 0.08);
-  border-left: 3px solid var(--accent);
+/* 削除時にすっと消える */
+.post-item.removing,
+.reply-item.removing {
+  opacity: 0;
+  transform: scale(0.96) translateY(-4px);
+  pointer-events: none;
 }
 
-.reply-item.focused {
-  padding-left: 8px;
-  border-radius: 4px;
+.post-item.focused {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint), var(--shadow);
 }
 
 .reply-list {
@@ -209,6 +318,18 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.reply-item.animate-in {
+  animation: rise 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.reply-item.focused {
+  background: var(--accent-tint);
+  border-left: 3px solid var(--accent);
+  padding: 8px;
+  border-radius: 10px;
 }
 
 .reply-count,
@@ -220,28 +341,28 @@ button:disabled {
   margin-top: 10px;
   padding: 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--card-bg);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+/* 返信フォームがふわっと開く */
+.reply-form:not([hidden]) {
+  animation: rise 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .reply-form input,
 .reply-form textarea {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 8px 10px;
   font-size: 14px;
   font-family: inherit;
-  background: var(--bg);
+  background: var(--card-bg);
   color: var(--text);
   margin-bottom: 8px;
   resize: vertical;
-}
-
-.reply-form input:focus,
-.reply-form textarea:focus {
-  outline: none;
-  border-color: var(--accent);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .reply-form-footer {
@@ -255,7 +376,17 @@ button:disabled {
 }
 
 .empty-state {
-  padding: 40px 20px;
+  padding: 48px 20px;
   text-align: center;
   color: var(--subtext);
+}
+
+/* 視差・動きを減らす設定のユーザーにはアニメーションを出さない */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
