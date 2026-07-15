@@ -4,6 +4,8 @@ on:
 jobs:
   revert:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -14,4 +16,5 @@ jobs:
           git config user.email "action@github.com"
           git revert -n 4ac369a25295d4dcc98fd2f85858aa35deeb23ad
           git commit -m "Revert: PR #14 をリバート（PR #13の状態に戻す）"
-          git push
+      - name: Push changes
+        run: git push
