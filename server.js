@@ -16,6 +16,7 @@ const MAX_USERNAME_LENGTH = 30;
 // レコード全体を読み書きしないことで、サーバーレス環境での同時リクエストによる上書きを避ける。
 const POSTS_KEY = 'sns:posts';
 const LIKES_KEY = 'sns:likes';
+const SHARES_KEY = 'sns:shares';
 const INDEX_KEY = 'sns:posts:index';
 // 返信も投稿と同じハッシュ(POSTS_KEY)に保存し、親投稿ごとの並び順だけを
 // 個別のソート済みセット(member=replyId, score=createdAt)で管理する
@@ -104,9 +105,9 @@ function hashToken(token) {
 }
 
 // ownerTokenHashは投稿者本人しか持たない秘密情報なので、外部に返すレスポンスからは必ず除外する
-function toPublicPost(post, likes) {
+function toPublicPost(post, likes, shares) {
   const { ownerTokenHash, ...publicPost } = post;
-  return { ...publicPost, likes };
+  return { ...publicPost, likes: likes || 0, shares: shares || 0 };
 }
 
 // 投稿と返信で共通の入力チェック。エラー時は { error }、成功時は { username, content } を返す
@@ -139,13 +140,14 @@ app.get('/api/posts', async (req, res) => {
   const replyIdLists = await Promise.all(ids.map((id) => redis.zrange(replyIndexKey(id), 0, -1)));
   const allIds = [...ids, ...replyIdLists.flat()];
 
-  const [postsData, likesData] = await Promise.all([
+  const [postsData, likesData, sharesData] = await Promise.all([
     Promise.all(allIds.map((id) => redis.hget(POSTS_KEY, id))),
     Promise.all(allIds.map((id) => redis.hget(LIKES_KEY, id))),
+    Promise.all(allIds.map((id) => redis.hget(SHARES_KEY, id))),
   ]);
 
   const publicById = new Map(
-    allIds.map((id, i) => [id, postsData[i] ? toPublicPost(postsData[i], likesData[i] || 0) : null])
+    allIds.map((id, i) => [id, postsData[i] ? toPublicPost(postsData[i], likesData[i], sharesData[i]) : null])
   );
 
   const posts = ids
@@ -179,11 +181,12 @@ app.post('/api/posts', async (req, res) => {
   await Promise.all([
     redis.hset(POSTS_KEY, { [id]: post }),
     redis.hset(LIKES_KEY, { [id]: 0 }),
+    redis.hset(SHARES_KEY, { [id]: 0 }),
     redis.zadd(INDEX_KEY, { score: post.createdAt, member: id }),
   ]);
 
   // 削除時の本人確認に使うトークンは、この作成レスポンスでのみ平文で返す
-  res.status(201).json({ ...toPublicPost(post, 0), ownerToken });
+  res.status(201).json({ ...toPublicPost(post, 0, 0), ownerToken });
 });
 
 app.post('/api/posts/:id/replies', async (req, res) => {
@@ -215,10 +218,11 @@ app.post('/api/posts/:id/replies', async (req, res) => {
   await Promise.all([
     redis.hset(POSTS_KEY, { [id]: reply }),
     redis.hset(LIKES_KEY, { [id]: 0 }),
+    redis.hset(SHARES_KEY, { [id]: 0 }),
     redis.zadd(replyIndexKey(req.params.id), { score: reply.createdAt, member: id }),
   ]);
 
-  res.status(201).json({ ...toPublicPost(reply, 0), ownerToken });
+  res.status(201).json({ ...toPublicPost(reply, 0, 0), ownerToken });
 });
 
 app.post('/api/posts/:id/like', async (req, res) => {
@@ -226,8 +230,24 @@ app.post('/api/posts/:id/like', async (req, res) => {
   if (!post) {
     return res.status(404).json({ error: '投稿が見つかりません。' });
   }
-  const likes = await redis.hincrby(LIKES_KEY, req.params.id, 1);
-  res.json(toPublicPost(post, likes));
+  const [likes, shares] = await Promise.all([
+    redis.hincrby(LIKES_KEY, req.params.id, 1),
+    redis.hget(SHARES_KEY, req.params.id),
+  ]);
+  res.json(toPublicPost(post, likes, shares));
+});
+
+// 共有ボタンが実際に使われた(コピー成功・共有シート完了)タイミングでカウントする
+app.post('/api/posts/:id/share', async (req, res) => {
+  const post = await redis.hget(POSTS_KEY, req.params.id);
+  if (!post) {
+    return res.status(404).json({ error: '投稿が見つかりません。' });
+  }
+  const [shares, likes] = await Promise.all([
+    redis.hincrby(SHARES_KEY, req.params.id, 1),
+    redis.hget(LIKES_KEY, req.params.id),
+  ]);
+  res.json(toPublicPost(post, likes, shares));
 });
 
 app.delete('/api/posts/:id', async (req, res) => {
@@ -242,10 +262,11 @@ app.delete('/api/posts/:id', async (req, res) => {
   }
 
   if (post.parentId) {
-    // 返信の削除: 本体・いいね数に加えて、親投稿の返信インデックスからも取り除く
+    // 返信の削除: 本体・いいね数・共有数に加えて、親投稿の返信インデックスからも取り除く
     await Promise.all([
       redis.hdel(POSTS_KEY, req.params.id),
       redis.hdel(LIKES_KEY, req.params.id),
+      redis.hdel(SHARES_KEY, req.params.id),
       redis.zrem(replyIndexKey(post.parentId), req.params.id),
     ]);
   } else {
@@ -254,6 +275,7 @@ app.delete('/api/posts/:id', async (req, res) => {
     await Promise.all([
       redis.hdel(POSTS_KEY, req.params.id, ...replyIds),
       redis.hdel(LIKES_KEY, req.params.id, ...replyIds),
+      redis.hdel(SHARES_KEY, req.params.id, ...replyIds),
       redis.zrem(INDEX_KEY, req.params.id),
       redis.del(replyIndexKey(req.params.id)),
     ]);
