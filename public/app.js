@@ -100,7 +100,7 @@ function renderReply(reply, myPostTokens, likedPostIds) {
       </div>
       <div class="post-content">${escapeHtml(reply.content)}</div>
       <div class="post-actions">
-        <button class="icon-button like-button ${isLiked ? 'liked' : ''}" data-action="like" ${isLiked ? 'disabled' : ''}>
+        <button class="icon-button like-button ${isLiked ? 'liked' : ''}" data-action="like" title="${isLiked ? 'いいねを取り消す' : 'いいね'}">
           ♥ <span class="like-count">${reply.likes}</span>
         </button>
         <button class="icon-button share-button" data-action="share">${shareButtonHtml(reply.shares)}</button>
@@ -135,7 +135,7 @@ function renderPosts(posts, animate = false) {
           </div>
           <div class="post-content">${escapeHtml(post.content)}</div>
           <div class="post-actions">
-            <button class="icon-button like-button ${isLiked ? 'liked' : ''}" data-action="like" ${isLiked ? 'disabled' : ''}>
+            <button class="icon-button like-button ${isLiked ? 'liked' : ''}" data-action="like" title="${isLiked ? 'いいねを取り消す' : 'いいね'}">
               ♥ <span class="like-count">${post.likes}</span>
             </button>
             <button class="icon-button reply-button" data-action="reply">${replyButtonHtml(replies.length)}</button>
@@ -301,20 +301,42 @@ postList.addEventListener('click', async (event) => {
       fetch(`/api/posts/${id}/share`, { method: 'POST' }).catch(() => {});
     }
   } else if (action === 'like') {
+    // もう一度押すと取り消せるトグル式。
     // サーバーの応答を待たずに即座に反映し(楽観的更新)、失敗したら巻き戻す
-    button.disabled = true;
-    button.classList.add('liked', 'pop');
-    addLikedPostId(id);
     const countEl = button.querySelector('.like-count');
-    countEl.textContent = Number(countEl.textContent) + 1;
-    try {
-      const res = await fetch(`/api/posts/${id}/like`, { method: 'POST' });
-      if (!res.ok) throw new Error('like failed');
-    } catch (err) {
-      removeLikedPostId(id);
+    const wasLiked = button.classList.contains('liked');
+    button.disabled = true; // 応答待ちの間の連打による多重送信だけ防ぐ
+
+    if (wasLiked) {
       button.classList.remove('liked', 'pop');
+      button.title = 'いいね';
+      removeLikedPostId(id);
+      countEl.textContent = Math.max(0, Number(countEl.textContent) - 1);
+    } else {
+      button.classList.add('liked', 'pop');
+      button.title = 'いいねを取り消す';
+      addLikedPostId(id);
+      countEl.textContent = Number(countEl.textContent) + 1;
+    }
+
+    try {
+      const res = await fetch(`/api/posts/${id}/like`, { method: wasLiked ? 'DELETE' : 'POST' });
+      if (!res.ok) throw new Error('like toggle failed');
+    } catch (err) {
+      // 巻き戻し
+      if (wasLiked) {
+        button.classList.add('liked');
+        button.title = 'いいねを取り消す';
+        addLikedPostId(id);
+        countEl.textContent = Number(countEl.textContent) + 1;
+      } else {
+        button.classList.remove('liked', 'pop');
+        button.title = 'いいね';
+        removeLikedPostId(id);
+        countEl.textContent = Math.max(0, Number(countEl.textContent) - 1);
+      }
+    } finally {
       button.disabled = false;
-      countEl.textContent = Number(countEl.textContent) - 1;
     }
   } else if (action === 'delete') {
     const isReply = targetItem.classList.contains('reply-item');
