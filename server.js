@@ -237,6 +237,21 @@ app.post('/api/posts/:id/like', async (req, res) => {
   res.json(toPublicPost(post, likes, shares));
 });
 
+// いいねの取り消し。0未満にはならないように補正する
+app.delete('/api/posts/:id/like', async (req, res) => {
+  const post = await redis.hget(POSTS_KEY, req.params.id);
+  if (!post) {
+    return res.status(404).json({ error: '投稿が見つかりません。' });
+  }
+  let likes = await redis.hincrby(LIKES_KEY, req.params.id, -1);
+  if (likes < 0) {
+    await redis.hset(LIKES_KEY, { [req.params.id]: 0 });
+    likes = 0;
+  }
+  const shares = await redis.hget(SHARES_KEY, req.params.id);
+  res.json(toPublicPost(post, likes, shares));
+});
+
 // 共有ボタンが実際に使われた(コピー成功・共有シート完了)タイミングでカウントする
 app.post('/api/posts/:id/share', async (req, res) => {
   const post = await redis.hget(POSTS_KEY, req.params.id);
