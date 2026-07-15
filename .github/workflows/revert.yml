@@ -1,0 +1,17 @@
+name: Revert PR #14
+on:
+  workflow_dispatch:
+jobs:
+  revert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Revert commit
+        run: |
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git revert -n 4ac369a25295d4dcc98fd2f85858aa35deeb23ad
+          git commit -m "Revert: PR #14 をリバート（PR #13の状態に戻す）"
+          git push
