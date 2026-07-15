@@ -203,6 +203,20 @@ button:disabled {
   font-weight: bold;
 }
 
+/* 本人証明のトリップ(◆xxxx) */
+.post-trip {
+  font-size: 13px;
+  color: var(--accent);
+}
+
+/* 投稿フォーム下の控えめなトリップ説明 */
+.trip-hint {
+  font-size: 12px;
+  color: var(--subtext);
+  margin: -4px 0 10px;
+  line-height: 1.5;
+}
+
 .post-time {
   font-size: 13px;
   color: var(--subtext);
