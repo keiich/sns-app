@@ -104,13 +104,24 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+// トリップ(なりすまし対策)の生成に使うサーバー側の秘密。
+// コードは公開されているため、サーバーしか知らない値を混ぜないと合言葉が総当たりで割れてしまう。
+// 専用のTRIP_SALTが未設定の場合は、既にサーバー秘密として存在するKVトークンを流用する。
+const TRIP_SALT = process.env.TRIP_SALT || process.env.KV_REST_API_TOKEN || '';
+
+// 名前欄の「#合言葉」から表示用トリップを生成する。
+// 同じ合言葉からは常に同じ文字列ができるため、本人であることの証明として機能する。
+function generateTrip(secret) {
+  return crypto.createHash('sha256').update(secret + TRIP_SALT).digest('base64url').slice(0, 10);
+}
+
 // ownerTokenHashは投稿者本人しか持たない秘密情報なので、外部に返すレスポンスからは必ず除外する
 function toPublicPost(post, likes, shares) {
   const { ownerTokenHash, ...publicPost } = post;
   return { ...publicPost, likes: likes || 0, shares: shares || 0 };
 }
 
-// 投稿と返信で共通の入力チェック。エラー時は { error }、成功時は { username, content } を返す
+// 投稿と返信で共通の入力チェック。エラー時は { error }、成功時は { username, trip, content } を返す
 function validatePostInput(body) {
   const { username, content } = body;
 
@@ -122,12 +133,26 @@ function validatePostInput(body) {
     return { error: `投稿内容は${MAX_CONTENT_LENGTH}文字以内で入力してください。` };
   }
 
-  const trimmedUsername = typeof username === 'string' ? username.trim() : '';
+  // 「名前#合言葉」形式ならトリップを生成する(合言葉自体は保存しない)
+  const rawUsername = typeof username === 'string' ? username : '';
+  const hashIndex = rawUsername.indexOf('#');
+  let namePart = rawUsername;
+  let trip = null;
+  if (hashIndex !== -1) {
+    const secret = rawUsername.slice(hashIndex + 1);
+    namePart = rawUsername.slice(0, hashIndex);
+    if (secret.length > 0) {
+      trip = generateTrip(secret);
+    }
+  }
+
+  // 名前に◆を直接入力してトリップ持ちを偽装できないよう、似た別の記号に置き換える
+  const trimmedUsername = namePart.replace(/◆/g, '◇').trim();
   if (trimmedUsername.length > MAX_USERNAME_LENGTH) {
     return { error: `ユーザー名は${MAX_USERNAME_LENGTH}文字以内で入力してください。` };
   }
 
-  return { username: trimmedUsername || '名無しさん', content: trimmedContent };
+  return { username: trimmedUsername || '名無しさん', trip, content: trimmedContent };
 }
 
 app.get('/api/posts', async (req, res) => {
@@ -173,6 +198,7 @@ app.post('/api/posts', async (req, res) => {
   const post = {
     id,
     username: input.username,
+    ...(input.trip ? { trip: input.trip } : {}),
     content: input.content,
     createdAt: Date.now(),
     ownerTokenHash: hashToken(ownerToken),
@@ -212,6 +238,7 @@ app.post('/api/posts/:id/replies', async (req, res) => {
     parentId: req.params.id,
     rootId,
     username: input.username,
+    ...(input.trip ? { trip: input.trip } : {}),
     content: input.content,
     createdAt: Date.now(),
     ownerTokenHash: hashToken(ownerToken),

@@ -100,7 +100,7 @@ function renderReply(reply, myPostTokens, likedPostIds) {
   return `
     <li class="reply-item" data-id="${reply.id}">
       <div class="post-item-header">
-        <span class="post-username">${escapeHtml(reply.username)}</span>
+        <span class="post-username">${escapeHtml(reply.username)}</span>${reply.trip ? `<span class="post-trip" title="本人証明のトリップ">◆${escapeHtml(reply.trip)}</span>` : ''}
         <span class="post-time" title="${formatAbsoluteTime(reply.createdAt)}">${formatTime(reply.createdAt)}</span>
       </div>
       ${reply.replyToUsername ? `<div class="reply-to-label">↳ ${escapeHtml(withSan(reply.replyToUsername))}への返信</div>` : ''}
@@ -137,7 +137,7 @@ function renderPosts(posts, animate = false) {
       return `
         <li class="post-item" data-id="${post.id}"${animate ? ` style="animation-delay:${Math.min(index * 45, 400)}ms"` : ''}>
           <div class="post-item-header">
-            <span class="post-username">${escapeHtml(post.username)}</span>
+            <span class="post-username">${escapeHtml(post.username)}</span>${post.trip ? `<span class="post-trip" title="本人証明のトリップ">◆${escapeHtml(post.trip)}</span>` : ''}
             <span class="post-time" title="${formatAbsoluteTime(post.createdAt)}">${formatTime(post.createdAt)}</span>
           </div>
           <div class="post-content">${escapeHtml(post.content)}</div>
@@ -159,7 +159,7 @@ function renderPosts(posts, animate = false) {
               class="reply-username-input"
               type="text"
               placeholder="ユーザー名（省略可）"
-              maxlength="30"
+              maxlength="64"
               autocomplete="off"
             />
             <textarea
