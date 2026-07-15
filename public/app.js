@@ -99,32 +99,6 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-function isAllDone(tasks) {
-  return tasks.length > 0 && tasks.every((t) => t.done);
-}
-
-// やることリスト+進捗バー。チェックは本人(isMine)だけ押せる
-function renderTasks(post, isMine) {
-  const doneCount = post.tasks.filter((t) => t.done).length;
-  return `
-    <ul class="task-list">
-      ${post.tasks
-        .map(
-          (task, i) => `
-        <li class="task-item ${task.done ? 'done' : ''}">
-          <button class="task-check" data-action="toggle-task" data-index="${i}" ${isMine ? '' : 'disabled'} title="${isMine ? 'チェックを切り替える' : '本人だけがチェックできます'}">${task.done ? '✅' : '⬜'}</button>
-          <span class="task-text">${escapeHtml(task.text)}</span>
-        </li>`
-        )
-        .join('')}
-    </ul>
-    <div class="task-progress">
-      <div class="task-progress-bar" style="width:${(doneCount / post.tasks.length) * 100}%"></div>
-    </div>
-    <span class="task-progress-label">${doneCount} / ${post.tasks.length} 達成</span>
-  `;
-}
-
 function renderReply(reply, myPostTokens, likedPostIds) {
   const isMine = Object.prototype.hasOwnProperty.call(myPostTokens, reply.id);
   const isLiked = likedPostIds.has(reply.id);
@@ -154,7 +128,7 @@ function renderPosts(posts, animate = false) {
 
   if (posts.length === 0) {
     postList.innerHTML = `<li class="empty-state">${
-      currentIsToday ? 'まだ宣言がありません。今日やることを最初に宣言しよう！' : 'この日の宣言はありません。'
+      currentIsToday ? 'まだ回答がありません。最初のボケをどうぞ！' : 'この日の回答はありません。'
     }</li>`;
     return;
   }
@@ -167,15 +141,13 @@ function renderPosts(posts, animate = false) {
       const isMine = Object.prototype.hasOwnProperty.call(myPostTokens, post.id);
       const isLiked = likedPostIds.has(post.id);
       const replies = post.replies || [];
-      const allDone = post.tasks ? isAllDone(post.tasks) : false;
       return `
-        <li class="post-item ${allDone ? 'all-done' : ''}" data-id="${post.id}"${animate ? ` style="animation-delay:${Math.min(index * 45, 400)}ms"` : ''}>
+        <li class="post-item" data-id="${post.id}"${animate ? ` style="animation-delay:${Math.min(index * 45, 400)}ms"` : ''}>
           <div class="post-item-header">
             <span class="post-username">${escapeHtml(post.username)}</span>${post.trip ? `<span class="post-trip" title="本人証明のトリップ">◆${escapeHtml(post.trip)}</span>` : ''}
             <span class="post-time" title="${formatAbsoluteTime(post.createdAt)}">${formatTime(post.createdAt)}</span>
-            <span class="all-done-badge" ${allDone ? '' : 'hidden'}>🏆 全部達成！</span>
           </div>
-          ${post.tasks ? renderTasks(post, isMine) : `<div class="post-content">${escapeHtml(post.content)}</div>`}
+          <div class="post-content">${escapeHtml(post.content)}</div>
           <div class="post-actions">
             <button class="icon-button like-button ${isLiked ? 'liked' : ''}" data-action="like" title="${isLiked ? 'いいねを取り消す' : 'いいね'}">
               ♥ <span class="like-count">${post.likes}</span>
@@ -199,7 +171,7 @@ function renderPosts(posts, animate = false) {
             />
             <textarea
               class="reply-content-input"
-              placeholder="相談や応援コメントを書く…"
+              placeholder="返信を書く…"
               maxlength="${MAX_CONTENT_LENGTH}"
               rows="2"
               required
@@ -245,10 +217,9 @@ function formatTopicDate(dateStr) {
 function renderTopic(data) {
   currentIsToday = data.isToday;
   topicDateEl.textContent = data.isToday
-    ? `今日のみんなの宣言（${formatTopicDate(data.date)}）`
-    : `${formatTopicDate(data.date)}のみんなの宣言`;
-  topicTextEl.textContent = '今日やることを宣言して、全部チェックを目指そう🔥';
-  topicTextEl.hidden = !data.isToday;
+    ? `今日のお題（${formatTopicDate(data.date)}）`
+    : `${formatTopicDate(data.date)}のお題`;
+  topicTextEl.textContent = data.topic;
 
   prevDayLink.href = `/?date=${shiftDate(data.date, -1)}`;
   const next = shiftDate(data.date, 1);
@@ -347,37 +318,7 @@ postList.addEventListener('click', async (event) => {
   const id = targetItem.dataset.id;
   const action = button.dataset.action;
 
-  if (action === 'toggle-task') {
-    const myPostTokens = getMyPostTokens();
-    const token = myPostTokens[id];
-    if (!token) return;
-
-    const taskItem = button.closest('.task-item');
-    const index = Number(button.dataset.index);
-    const nowDone = !taskItem.classList.contains('done');
-
-    // 楽観的更新: 見た目を即座に切り替え、通信は裏で行う
-    taskItem.classList.toggle('done', nowDone);
-    button.textContent = nowDone ? '✅' : '⬜';
-    const wasAllDone = targetItem.classList.contains('all-done');
-    refreshTaskProgress(targetItem);
-
-    try {
-      const res = await fetch(`/api/posts/${id}/tasks/${index}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'X-Owner-Token': token },
-        body: JSON.stringify({ done: nowDone }),
-      });
-      if (!res.ok) throw new Error('toggle failed');
-      // 最後の1つを押して全達成になった瞬間だけ、盛大に祝う
-      if (!wasAllDone && targetItem.classList.contains('all-done')) {
-        celebrate();
-      }
-    } catch (err) {
-      // 失敗したらサーバーの状態に合わせて描き直す
-      loadPosts().catch(() => {});
-    }
-  } else if (action === 'reply') {
+  if (action === 'reply') {
     const form = button.closest('.post-item').querySelector('.reply-form');
     const indicator = form.querySelector('.replying-to');
     const replyItem = button.closest('.reply-item');
@@ -504,49 +445,6 @@ postList.addEventListener('click', async (event) => {
     }
   }
 });
-
-// チェック状況から進捗バー・ラベル・全達成状態を再計算する
-function refreshTaskProgress(postItem) {
-  const total = postItem.querySelectorAll('.task-item').length;
-  const done = postItem.querySelectorAll('.task-item.done').length;
-  postItem.querySelector('.task-progress-bar').style.width = `${(done / total) * 100}%`;
-  postItem.querySelector('.task-progress-label').textContent = `${done} / ${total} 達成`;
-  const allDone = done === total;
-  postItem.classList.toggle('all-done', allDone);
-  postItem.querySelector('.all-done-badge').hidden = !allDone;
-}
-
-// 全達成の瞬間の演出: 紙吹雪+でっかい称賛メッセージ
-const PRAISES = [
-  '🎉👑 全タスク制覇！！今日のあなたは伝説です！！',
-  '🌈✨ 完・全・達・成！！世界があなたを称えています！！',
-  '🏆🔥 パーフェクト達成！！もはや偉業！！',
-  '💮🎊 全部やりきった！！今日のMVPはあなたです！！',
-  '⚡😎 有言実行、全達成！！かっこよすぎる！！',
-  '🚀🌟 ミッションコンプリート！！あなたに不可能はない！！',
-];
-
-function celebrate() {
-  const overlay = document.getElementById('celebration');
-  const message = document.getElementById('celebration-message');
-  message.textContent = PRAISES[Math.floor(Math.random() * PRAISES.length)];
-  overlay.hidden = false;
-
-  for (let i = 0; i < 80; i++) {
-    const piece = document.createElement('span');
-    piece.className = 'confetti';
-    piece.style.left = `${Math.random() * 100}vw`;
-    piece.style.background = `hsl(${Math.floor(Math.random() * 360)}, 90%, 60%)`;
-    piece.style.animationDelay = `${Math.random() * 0.8}s`;
-    piece.style.animationDuration = `${2 + Math.random() * 1.5}s`;
-    overlay.appendChild(piece);
-  }
-
-  setTimeout(() => {
-    overlay.hidden = true;
-    overlay.querySelectorAll('.confetti').forEach((el) => el.remove());
-  }, 3800);
-}
 
 // 返信フォームは投稿ごとに動的生成されるため、送信イベントはリスト側で委譲して受ける
 postList.addEventListener('submit', async (event) => {
