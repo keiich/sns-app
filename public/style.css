@@ -349,6 +349,11 @@ button:disabled {
   font-weight: bold;
 }
 
+/* display:flexがブラウザ標準の[hidden]{display:none}を上書きしてしまうため明示する */
+.replying-to[hidden] {
+  display: none;
+}
+
 .replying-to .cancel-reply-to {
   background: none;
   border: none;
