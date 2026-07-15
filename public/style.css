@@ -5,14 +5,13 @@
   --text: #0f1419;
   --subtext: #64748b;
   --border: #e2e8f0;
-  --accent: #1d9bf0;
-  --accent-hover: #1a8cd8;
-  --accent-2: #7c5cff;
+  --accent: #16a34a;
+  --accent-hover: #15803d;
   --danger: #ef2d6a;
   --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 16px rgba(15, 23, 42, 0.06);
   --shadow-hover: 0 2px 4px rgba(15, 23, 42, 0.08), 0 8px 24px rgba(15, 23, 42, 0.1);
   --like-tint: rgba(239, 45, 106, 0.12);
-  --accent-tint: rgba(29, 155, 240, 0.12);
+  --accent-tint: rgba(22, 163, 74, 0.12);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -25,7 +24,7 @@
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.35);
     --shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.45);
     --like-tint: rgba(239, 45, 106, 0.18);
-    --accent-tint: rgba(29, 155, 240, 0.18);
+    --accent-tint: rgba(22, 163, 74, 0.2);
   }
 }
 
@@ -63,11 +62,7 @@ body {
   margin: 0;
   font-size: 22px;
   letter-spacing: 0.02em;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  width: fit-content;
+  color: var(--text);
 }
 
 .post-form {
@@ -121,7 +116,7 @@ body {
 }
 
 button {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: var(--accent);
   color: #fff;
   border: none;
   border-radius: 999px;
@@ -131,11 +126,11 @@ button {
   font-family: inherit;
   cursor: pointer;
   box-shadow: 0 2px 8px var(--accent-tint);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
 button:hover {
-  filter: brightness(1.08);
+  background: var(--accent-hover);
   transform: translateY(-1px);
   box-shadow: 0 4px 14px var(--accent-tint);
 }
