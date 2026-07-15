@@ -211,7 +211,8 @@ button:disabled {
   gap: 4px;
 }
 
-.reply-count {
+.reply-count,
+.share-count {
   font-weight: bold;
 }
 

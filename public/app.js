@@ -89,7 +89,7 @@ function renderReply(reply, myPostTokens, likedPostIds) {
         <button class="icon-button like-button ${isLiked ? 'liked' : ''}" data-action="like" ${isLiked ? 'disabled' : ''}>
           ♥ <span class="like-count">${reply.likes}</span>
         </button>
-        <button class="icon-button share-button" data-action="share">🔗 共有</button>
+        <button class="icon-button share-button" data-action="share">🔗 共有${reply.shares > 0 ? ` <span class="share-count">${reply.shares}</span>` : ''}</button>
         ${isMine ? '<button class="icon-button delete-button" data-action="delete">削除</button>' : ''}
       </div>
     </li>
@@ -124,7 +124,7 @@ function renderPosts(posts) {
             <button class="icon-button reply-button" data-action="reply">
               💬 返信${replies.length > 0 ? ` <span class="reply-count">${replies.length}</span>` : ''}
             </button>
-            <button class="icon-button share-button" data-action="share">🔗 共有</button>
+            <button class="icon-button share-button" data-action="share">🔗 共有${post.shares > 0 ? ` <span class="share-count">${post.shares}</span>` : ''}</button>
             ${isMine ? '<button class="icon-button delete-button" data-action="delete">削除</button>' : ''}
           </div>
           ${replies.length > 0 ? `<ul class="reply-list">${replies.map((r) => renderReply(r, myPostTokens, likedPostIds)).join('')}</ul>` : ''}
@@ -255,12 +255,14 @@ postList.addEventListener('click', async (event) => {
     }
   } else if (action === 'share') {
     const shareUrl = `${location.origin}/post/${id}`;
+    let shared = false;
     if (navigator.share) {
       // モバイルではOSの共有シート(Xアプリなどに直接渡せる)を優先する
       try {
         await navigator.share({ title: 'ぷちSNS', url: shareUrl });
+        shared = true;
       } catch (err) {
-        // 共有シートを閉じただけの場合もhere。何もしない
+        // 共有シートをキャンセルしただけの場合はカウントしない
       }
     } else {
       try {
@@ -270,9 +272,23 @@ postList.addEventListener('click', async (event) => {
         setTimeout(() => {
           button.innerHTML = originalHtml;
         }, 1500);
+        shared = true;
       } catch (err) {
-        prompt('このリンクをコピーしてください', shareUrl);
+        shared = prompt('このリンクをコピーしてください', shareUrl) !== null;
       }
+    }
+    if (shared) {
+      try {
+        await fetch(`/api/posts/${id}/share`, { method: 'POST' });
+      } catch (err) {
+        // カウントの失敗は致命的ではないので無視する
+      }
+      // 「コピーしました！」の表示が消えてから回数を反映する(入力中の返信フォームがあれば見送る)
+      setTimeout(() => {
+        if (!postList.querySelector('.reply-form:not([hidden])')) {
+          loadPosts().catch(() => {});
+        }
+      }, 1600);
     }
   } else if (action === 'like') {
     // 連打で複数回いいねを送れないよう、応答を待つ前にボタンを無効化する
