@@ -98,11 +98,13 @@ function renderReply(reply, myPostTokens, likedPostIds) {
         <span class="post-username">${escapeHtml(reply.username)}</span>
         <span class="post-time" title="${formatAbsoluteTime(reply.createdAt)}">${formatTime(reply.createdAt)}</span>
       </div>
+      ${reply.replyToUsername ? `<div class="reply-to-label">↳ ${escapeHtml(reply.replyToUsername)}さんへの返信</div>` : ''}
       <div class="post-content">${escapeHtml(reply.content)}</div>
       <div class="post-actions">
         <button class="icon-button like-button ${isLiked ? 'liked' : ''}" data-action="like" title="${isLiked ? 'いいねを取り消す' : 'いいね'}">
           ♥ <span class="like-count">${reply.likes}</span>
         </button>
+        <button class="icon-button reply-button" data-action="reply">💬 返信</button>
         <button class="icon-button share-button" data-action="share">${shareButtonHtml(reply.shares)}</button>
         ${isMine ? '<button class="icon-button delete-button" data-action="delete">削除</button>' : ''}
       </div>
@@ -144,6 +146,10 @@ function renderPosts(posts, animate = false) {
           </div>
           ${replies.length > 0 ? `<ul class="reply-list">${replies.map((r) => renderReply(r, myPostTokens, likedPostIds)).join('')}</ul>` : ''}
           <form class="reply-form" hidden>
+            <p class="replying-to" hidden>
+              <span class="replying-to-name"></span>
+              <button type="button" class="cancel-reply-to" data-action="cancel-reply-to" title="宛先を解除">×</button>
+            </p>
             <input
               class="reply-username-input"
               type="text"
@@ -266,10 +272,32 @@ postList.addEventListener('click', async (event) => {
 
   if (action === 'reply') {
     const form = button.closest('.post-item').querySelector('.reply-form');
-    form.hidden = !form.hidden;
+    const indicator = form.querySelector('.replying-to');
+    const replyItem = button.closest('.reply-item');
+    if (replyItem) {
+      // 返信への返信: フォームを開いて宛先をセットする(開閉トグルはしない)
+      form.hidden = false;
+      form.dataset.replyTo = replyItem.dataset.id;
+      indicator.querySelector('.replying-to-name').textContent =
+        `${replyItem.querySelector('.post-username').textContent}さんに返信`;
+      indicator.hidden = false;
+    } else {
+      // 投稿への返信: 宛先なしの通常トグル(宛先付きで開いていた場合は宛先だけ解除して開いたままにする)
+      if (form.hidden) {
+        form.hidden = false;
+      } else if (!form.dataset.replyTo) {
+        form.hidden = true;
+      }
+      delete form.dataset.replyTo;
+      indicator.hidden = true;
+    }
     if (!form.hidden) {
       form.querySelector('.reply-content-input').focus();
     }
+  } else if (action === 'cancel-reply-to') {
+    const form = button.closest('.reply-form');
+    delete form.dataset.replyTo;
+    form.querySelector('.replying-to').hidden = true;
   } else if (action === 'share') {
     const shareUrl = `${location.origin}/post/${id}`;
     const newCount = Number(button.querySelector('.share-count')?.textContent || 0) + 1;
@@ -356,7 +384,7 @@ postList.addEventListener('click', async (event) => {
         if (parentPostItem) {
           const replyList = parentPostItem.querySelector('.reply-list');
           if (replyList && replyList.children.length === 0) replyList.remove();
-          const replyButton = parentPostItem.querySelector('button[data-action="reply"]');
+          const replyButton = parentPostItem.querySelector(':scope > .post-actions button[data-action="reply"]');
           replyButton.innerHTML = replyButtonHtml(parentPostItem.querySelectorAll('.reply-item').length);
         }
         if (!postList.querySelector('.post-item')) {
@@ -376,7 +404,8 @@ postList.addEventListener('submit', async (event) => {
   if (!form) return;
   event.preventDefault();
 
-  const postId = form.closest('.post-item').dataset.id;
+  // 宛先が指定されていればその返信宛て、なければ投稿宛て
+  const postId = form.dataset.replyTo || form.closest('.post-item').dataset.id;
   const username = form.querySelector('.reply-username-input').value;
   const content = form.querySelector('.reply-content-input').value;
   const replyError = form.querySelector('.reply-error');
@@ -420,10 +449,13 @@ postList.addEventListener('submit', async (event) => {
     }
     replyList.insertAdjacentHTML('beforeend', renderReply(data, getMyPostTokens(), getLikedPostIds()));
     replyList.lastElementChild.classList.add('animate-in');
-    const replyButton = postItem.querySelector('button[data-action="reply"]');
+    // 投稿直下の返信ボタン(返信内の返信ボタンではない)の件数を更新する
+    const replyButton = postItem.querySelector(':scope > .post-actions button[data-action="reply"]');
     replyButton.innerHTML = replyButtonHtml(replyList.children.length);
     form.querySelector('.reply-content-input').value = '';
     form.hidden = true;
+    delete form.dataset.replyTo;
+    form.querySelector('.replying-to').hidden = true;
   } catch (err) {
     replyError.textContent = '通信エラーが発生しました。';
     replyError.hidden = false;
