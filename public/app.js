@@ -59,6 +59,11 @@ function replyButtonHtml(count) {
   return `💬 返信${count > 0 ? ` <span class="reply-count">${count}</span>` : ''}`;
 }
 
+// 「名無しさん」のように既に「さん」で終わる名前に敬称を重ねない
+function withSan(name) {
+  return name.endsWith('さん') ? name : `${name}さん`;
+}
+
 function formatAbsoluteTime(timestamp) {
   const date = new Date(timestamp);
   return date.toLocaleString('ja-JP', {
@@ -98,7 +103,7 @@ function renderReply(reply, myPostTokens, likedPostIds) {
         <span class="post-username">${escapeHtml(reply.username)}</span>
         <span class="post-time" title="${formatAbsoluteTime(reply.createdAt)}">${formatTime(reply.createdAt)}</span>
       </div>
-      ${reply.replyToUsername ? `<div class="reply-to-label">↳ ${escapeHtml(reply.replyToUsername)}さんへの返信</div>` : ''}
+      ${reply.replyToUsername ? `<div class="reply-to-label">↳ ${escapeHtml(withSan(reply.replyToUsername))}への返信</div>` : ''}
       <div class="post-content">${escapeHtml(reply.content)}</div>
       <div class="post-actions">
         <button class="icon-button like-button ${isLiked ? 'liked' : ''}" data-action="like" title="${isLiked ? 'いいねを取り消す' : 'いいね'}">
@@ -279,7 +284,7 @@ postList.addEventListener('click', async (event) => {
       form.hidden = false;
       form.dataset.replyTo = replyItem.dataset.id;
       indicator.querySelector('.replying-to-name').textContent =
-        `${replyItem.querySelector('.post-username').textContent}さんに返信`;
+        `${withSan(replyItem.querySelector('.post-username').textContent)}に返信`;
       indicator.hidden = false;
     } else {
       // 投稿への返信: 宛先なしの通常トグル(宛先付きで開いていた場合は宛先だけ解除して開いたままにする)
