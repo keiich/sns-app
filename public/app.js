@@ -285,8 +285,8 @@ function formatTopicDate(dateStr) {
 function renderTopic(data) {
   currentIsToday = data.isToday;
   topicDateEl.textContent = data.isToday
-    ? `今日のみんなの宣言（${formatTopicDate(data.date)}）`
-    : `${formatTopicDate(data.date)}のみんなの宣言`;
+    ? `今日のみんなの達成宣言（${formatTopicDate(data.date)}）`
+    : `${formatTopicDate(data.date)}のみんなの達成宣言`;
 
   prevDayLink.href = `/?date=${shiftDate(data.date, -1)}`;
   const next = shiftDate(data.date, 1);
