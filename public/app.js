@@ -5,7 +5,6 @@ const charCount = document.getElementById('char-count');
 const errorMessage = document.getElementById('error-message');
 const postList = document.getElementById('post-list');
 const topicDateEl = document.getElementById('topic-date');
-const topicTextEl = document.getElementById('topic-text');
 const archiveNotice = document.getElementById('archive-notice');
 const prevDayLink = document.getElementById('prev-day');
 const nextDayLink = document.getElementById('next-day');
@@ -288,8 +287,6 @@ function renderTopic(data) {
   topicDateEl.textContent = data.isToday
     ? `今日のみんなの宣言（${formatTopicDate(data.date)}）`
     : `${formatTopicDate(data.date)}のみんなの宣言`;
-  topicTextEl.textContent = '今日みんなで達成したいことを宣言して、全部チェックを目指そう🔥';
-  topicTextEl.hidden = !data.isToday;
 
   prevDayLink.href = `/?date=${shiftDate(data.date, -1)}`;
   const next = shiftDate(data.date, 1);
