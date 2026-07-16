@@ -3,35 +3,35 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ぷちSNS</title>
-<meta name="description" content="登録不要で気軽につぶやける小さなSNS。いいねや返信もできます。" />
+<title>みんたつ</title>
+<meta name="description" content="今日やることを宣言してチェックで達成管理。全部できたらみんなで盛大にお祝い。登録不要のゆるいSNS。" />
 <meta name="theme-color" content="#16a34a" />
 <meta property="og:type" content="website" />
-<meta property="og:site_name" content="ぷちSNS" />
-<meta property="og:title" content="ぷちSNS" />
-<meta property="og:description" content="登録不要で気軽につぶやける小さなSNS。いいねや返信もできます。" />
+<meta property="og:site_name" content="みんたつ" />
+<meta property="og:title" content="みんたつ" />
+<meta property="og:description" content="今日やることを宣言してチェックで達成管理。全部できたらみんなで盛大にお祝い。登録不要のゆるいSNS。" />
 <meta name="twitter:card" content="summary" />
-<link rel="icon" href="favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="favicon.png" type="image/png" />
 <link rel="apple-touch-icon" href="icon.png" />
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 <div class="app">
   <header class="app-header">
-    <h1>ぷちSNS</h1>
-    <p class="app-tagline">毎日0時に新しいお題が出る、匿名大喜利SNS</p>
+    <h1>みんたつ</h1>
+    <p class="app-tagline">今日やることを宣言して、みんなで達成を祝うSNS</p>
   </header>
 
   <main>
     <section id="topic-card" class="topic-card">
       <div class="topic-card-header">
-        <a id="prev-day" class="day-nav" title="前の日のお題">←</a>
+        <a id="prev-day" class="day-nav" title="前の日">←</a>
         <span id="topic-date" class="topic-date"></span>
-        <a id="next-day" class="day-nav" title="次の日のお題" hidden>→</a>
+        <a id="next-day" class="day-nav" title="次の日" hidden>→</a>
       </div>
       <p id="topic-text" class="topic-text"></p>
       <p id="archive-notice" class="archive-notice" hidden>
-        これは過去のお題です。<a href="/">今日のお題に答える →</a>
+        これは過去の宣言です。<a href="/">今日の宣言をする →</a>
       </p>
     </section>
 
@@ -46,9 +46,9 @@
       <p class="trip-hint">💡 名前を「けい#ひみつ」のようにすると「けい◆xxxx」と表示され、同じ合言葉を知る本人だけが同じ◆を出せます（なりすまし防止）。合言葉は復元できないので必ず覚えておいてください。</p>
       <textarea
         id="content-input"
-        placeholder="このお題にボケてください…"
+        placeholder="今日やることを1行に1つずつ書こう&#10;例：&#10;数学の宿題を終わらせる&#10;30分ジョギング"
         maxlength="280"
-        rows="3"
+        rows="4"
         required
       ></textarea>
       <div class="post-form-footer">
@@ -60,6 +60,13 @@
 
     <ul id="post-list" class="post-list"></ul>
   </main>
+</div>
+
+<div id="celebration" hidden>
+  <div class="celebration-inner">
+    <img id="celebration-mascot" src="mascot.png" alt="ミン・タツ・ツー" />
+    <div id="celebration-message"></div>
+  </div>
 </div>
 
 <script src="app.js"></script>
