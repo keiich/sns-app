@@ -193,8 +193,9 @@ function renderPosts(posts, animate = false) {
   postList.classList.toggle('animate', animate);
 
   if (posts.length === 0) {
-    postList.innerHTML = `<li class="empty-state"><img class="empty-mascot" src="mascot.png" alt="ミン・タツ・ツー" />${
-      currentIsToday ? 'まだ宣言がありません。今日やることを最初に宣言しよう！' : 'この日の宣言はありません。'
+    // マスコットは直下のフッターに常駐しているので、空状態はテキストのみにする
+    postList.innerHTML = `<li class="empty-state">${
+      currentIsToday ? 'まだ宣言がありません。今日みんなで達成したいことを最初に宣言しよう！' : 'この日の宣言はありません。'
     }</li>`;
     return;
   }
@@ -287,7 +288,7 @@ function renderTopic(data) {
   topicDateEl.textContent = data.isToday
     ? `今日のみんなの宣言（${formatTopicDate(data.date)}）`
     : `${formatTopicDate(data.date)}のみんなの宣言`;
-  topicTextEl.textContent = '今日やることを宣言して、全部チェックを目指そう🔥';
+  topicTextEl.textContent = '今日みんなで達成したいことを宣言して、全部チェックを目指そう🔥';
   topicTextEl.hidden = !data.isToday;
 
   prevDayLink.href = `/?date=${shiftDate(data.date, -1)}`;

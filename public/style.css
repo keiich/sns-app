@@ -684,16 +684,33 @@ button:disabled {
 }
 
 .empty-state {
-  padding: 40px 20px 48px;
+  padding: 40px 20px 24px;
   text-align: center;
   color: var(--subtext);
 }
 
-.empty-mascot {
-  display: block;
-  margin: 0 auto 14px;
-  width: 220px;
-  max-width: 70%;
+/* タイムラインの一番下でミン・タツ・ツーが見送るフッター */
+.app-footer {
+  padding: 36px 20px 8px;
+  text-align: center;
+}
+
+.footer-mascot {
+  width: 210px;
+  max-width: 64%;
+}
+
+.footer-text {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--subtext);
+}
+
+.footer-brand {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--accent);
 }
 
 /* 視差・動きを減らす設定のユーザーにはアニメーションを出さない */
