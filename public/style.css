@@ -87,7 +87,6 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 6px;
 }
 
 .topic-date {
@@ -111,13 +110,6 @@ body {
 .day-nav:hover {
   background: var(--accent-tint);
   color: var(--accent);
-}
-
-.topic-text {
-  margin: 0;
-  font-size: 17px;
-  font-weight: bold;
-  line-height: 1.5;
 }
 
 .archive-notice {
