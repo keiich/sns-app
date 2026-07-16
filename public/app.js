@@ -69,6 +69,46 @@ function withSan(name) {
   return name.endsWith('さん') ? name : `${name}さん`;
 }
 
+// ---- 合言葉(トリップ)による端末をまたいだ本人確認 ----
+// 名前欄の「#合言葉」があれば、自分のトリップをサーバーに問い合わせて覚えておき、
+// 同じトリップが付いた投稿を「自分の投稿」として扱う(削除・チェックの操作はサーバー側でも検証される)
+let myTrip = null;
+
+function getTripSecret() {
+  const raw = usernameInput.value || getSavedUsername();
+  const hashIndex = raw.indexOf('#');
+  return hashIndex === -1 ? '' : raw.slice(hashIndex + 1);
+}
+
+async function updateMyTrip() {
+  const secret = getTripSecret();
+  if (!secret) {
+    myTrip = null;
+    return;
+  }
+  try {
+    const res = await fetch(`/api/trip?secret=${encodeURIComponent(secret)}`);
+    myTrip = (await res.json()).trip;
+  } catch (err) {
+    myTrip = null;
+  }
+}
+
+function isMinePost(post, myPostTokens) {
+  if (Object.prototype.hasOwnProperty.call(myPostTokens, post.id)) return true;
+  return Boolean(post.trip && myTrip && post.trip === myTrip);
+}
+
+// 削除・チェックの本人確認用ヘッダー(端末内トークンと合言葉の両方を送り、サーバー側でどちらかを検証)
+function ownerHeaders(id) {
+  const headers = {};
+  const token = getMyPostTokens()[id];
+  if (token) headers['X-Owner-Token'] = token;
+  const secret = getTripSecret();
+  if (secret) headers['X-Trip-Secret'] = encodeURIComponent(secret);
+  return headers;
+}
+
 function formatAbsoluteTime(timestamp) {
   const date = new Date(timestamp);
   return date.toLocaleString('ja-JP', {
@@ -126,7 +166,7 @@ function renderTasks(post, isMine) {
 }
 
 function renderReply(reply, myPostTokens, likedPostIds) {
-  const isMine = Object.prototype.hasOwnProperty.call(myPostTokens, reply.id);
+  const isMine = isMinePost(reply, myPostTokens);
   const isLiked = likedPostIds.has(reply.id);
   return `
     <li class="reply-item" data-id="${reply.id}">
@@ -164,7 +204,7 @@ function renderPosts(posts, animate = false) {
 
   postList.innerHTML = posts
     .map((post, index) => {
-      const isMine = Object.prototype.hasOwnProperty.call(myPostTokens, post.id);
+      const isMine = isMinePost(post, myPostTokens);
       const isLiked = likedPostIds.has(post.id);
       const replies = post.replies || [];
       const allDone = post.tasks ? isAllDone(post.tasks) : false;
@@ -348,9 +388,8 @@ postList.addEventListener('click', async (event) => {
   const action = button.dataset.action;
 
   if (action === 'toggle-task') {
-    const myPostTokens = getMyPostTokens();
-    const token = myPostTokens[id];
-    if (!token) return;
+    const auth = ownerHeaders(id);
+    if (Object.keys(auth).length === 0) return;
 
     const taskItem = button.closest('.task-item');
     const index = Number(button.dataset.index);
@@ -365,7 +404,7 @@ postList.addEventListener('click', async (event) => {
     try {
       const res = await fetch(`/api/posts/${id}/tasks/${index}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'X-Owner-Token': token },
+        headers: { 'Content-Type': 'application/json', ...auth },
         body: JSON.stringify({ done: nowDone }),
       });
       if (!res.ok) throw new Error('toggle failed');
@@ -476,10 +515,9 @@ postList.addEventListener('click', async (event) => {
   } else if (action === 'delete') {
     const isReply = targetItem.classList.contains('reply-item');
     if (!confirm(isReply ? 'この返信を削除しますか？' : 'この投稿を削除しますか？')) return;
-    const myPostTokens = getMyPostTokens();
     const res = await fetch(`/api/posts/${id}`, {
       method: 'DELETE',
-      headers: { 'X-Owner-Token': myPostTokens[id] || '' },
+      headers: ownerHeaders(id),
     });
     if (res.ok || res.status === 204) {
       removeMyPostToken(id);
@@ -615,8 +653,24 @@ postList.addEventListener('submit', async (event) => {
   }
 });
 
+// 名前欄の合言葉を変えたら「自分の投稿」の判定をやり直す(別の端末で合言葉を入れた瞬間に
+// 自分のトリップ付き投稿へ削除・チェックボタンが現れる)。
+// changeはフォーカスが外れるたびに発火しうるので、合言葉が実際に変わったときだけ再描画する
+// (直後の操作の楽観的更新を無関係な再描画で消さないため)
+let lastProcessedSecret = null;
+
+usernameInput.addEventListener('change', () => {
+  const secret = getTripSecret();
+  if (secret === lastProcessedSecret) return;
+  lastProcessedSecret = secret;
+  updateMyTrip()
+    .then(() => loadPosts())
+    .catch(() => {});
+});
+
 usernameInput.value = getSavedUsername();
-loadPosts(true);
+lastProcessedSecret = getTripSecret();
+updateMyTrip().finally(() => loadPosts(true));
 
 // 一定間隔でタイムラインを自動更新する。
 // 返信フォームを開いている(入力中かもしれない)間と、タブが非表示の間は書き換えない。

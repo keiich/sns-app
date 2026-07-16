@@ -171,6 +171,31 @@ function generateTrip(secret) {
   return crypto.createHash('sha256').update(secret + TRIP_SALT).digest('base64url').slice(0, 10);
 }
 
+// ヘッダーの合言葉はASCII制約のためencodeURIComponentされて届く
+function requestTripSecret(req) {
+  const raw = req.get('X-Trip-Secret') || '';
+  try {
+    return decodeURIComponent(raw);
+  } catch (err) {
+    return raw;
+  }
+}
+
+// 本人確認: 投稿時に発行した端末内トークン、または(トリップ付き投稿なら)
+// 同じトリップを生成できる合言葉の提示でも本人とみなす。
+// これにより合言葉を知っている本人は別の端末からでも自分の投稿を操作できる。
+function isOwner(post, req) {
+  const ownerToken = req.get('X-Owner-Token') || '';
+  if (post.ownerTokenHash && ownerToken && hashToken(ownerToken) === post.ownerTokenHash) {
+    return true;
+  }
+  const secret = requestTripSecret(req);
+  if (post.trip && secret && generateTrip(secret) === post.trip) {
+    return true;
+  }
+  return false;
+}
+
 // ownerTokenHashは投稿者本人しか持たない秘密情報なので、外部に返すレスポンスからは必ず除外する
 function toPublicPost(post, likes, shares) {
   const { ownerTokenHash, ...publicPost } = post;
@@ -353,6 +378,13 @@ app.post('/api/posts/:id/replies', async (req, res) => {
   res.status(201).json({ ...toPublicPost(reply, 0, 0), ownerToken });
 });
 
+// 合言葉から自分のトリップを問い合わせる。フロントが「どの投稿が自分のものか」を
+// 判定するために使う(実際の操作の可否はサーバー側のisOwnerで別途検証される)
+app.get('/api/trip', (req, res) => {
+  const secret = typeof req.query.secret === 'string' ? req.query.secret : '';
+  res.json({ trip: secret ? generateTrip(secret) : null });
+});
+
 // やることのチェックON/OFF。投稿した本人(オーナートークン保持者)だけが押せる
 app.patch('/api/posts/:id/tasks/:index', async (req, res) => {
   const post = await redis.hget(POSTS_KEY, req.params.id);
@@ -360,8 +392,7 @@ app.patch('/api/posts/:id/tasks/:index', async (req, res) => {
     return res.status(404).json({ error: '投稿が見つかりません。' });
   }
 
-  const ownerToken = req.get('X-Owner-Token') || '';
-  if (!post.ownerTokenHash || hashToken(ownerToken) !== post.ownerTokenHash) {
+  if (!isOwner(post, req)) {
     return res.status(403).json({ error: 'チェックできるのは投稿した本人だけです。' });
   }
 
@@ -427,8 +458,7 @@ app.delete('/api/posts/:id', async (req, res) => {
     return res.status(404).json({ error: '投稿が見つかりません。' });
   }
 
-  const ownerToken = req.get('X-Owner-Token') || '';
-  if (!post.ownerTokenHash || hashToken(ownerToken) !== post.ownerTokenHash) {
+  if (!isOwner(post, req)) {
     return res.status(403).json({ error: 'この投稿を削除する権限がありません。' });
   }
 
