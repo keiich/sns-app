@@ -5,6 +5,7 @@ const charCount = document.getElementById('char-count');
 const errorMessage = document.getElementById('error-message');
 const postList = document.getElementById('post-list');
 const topicDateEl = document.getElementById('topic-date');
+const topicTitleEl = document.getElementById('topic-title');
 const archiveNotice = document.getElementById('archive-notice');
 const prevDayLink = document.getElementById('prev-day');
 const nextDayLink = document.getElementById('next-day');
@@ -284,9 +285,9 @@ function formatTopicDate(dateStr) {
 
 function renderTopic(data) {
   currentIsToday = data.isToday;
-  topicDateEl.textContent = data.isToday
-    ? `今日のみんなの達成宣言（${formatTopicDate(data.date)}）`
-    : `${formatTopicDate(data.date)}のみんなの達成宣言`;
+  // 日付とタイトルを別の行に分け、画面幅による中途半端な折り返しをなくす
+  topicDateEl.textContent = data.isToday ? `${formatTopicDate(data.date)}（今日）` : formatTopicDate(data.date);
+  topicTitleEl.textContent = data.isToday ? '今日のみんなの達成宣言' : 'みんなの達成宣言';
 
   prevDayLink.href = `/?date=${shiftDate(data.date, -1)}`;
   const next = shiftDate(data.date, 1);

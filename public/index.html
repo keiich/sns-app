@@ -18,8 +18,13 @@
 <body>
 <div class="app">
   <header class="app-header">
-    <h1>みんたつ</h1>
-    <p class="app-tagline">「みんなで達成」略して、みんたつ。今日みんなで達成したいことを宣言するSNS</p>
+    <div class="app-header-row">
+      <div class="app-header-titles">
+        <h1>みんたつ</h1>
+        <p class="app-tagline">「みんなで達成」略して、みんたつ。今日みんなで達成したいことを宣言するSNS</p>
+      </div>
+      <img class="header-mascot" src="mascot.png" alt="ミン・タツ・ツー" />
+    </div>
   </header>
 
   <main>
@@ -29,6 +34,7 @@
         <span id="topic-date" class="topic-date"></span>
         <a id="next-day" class="day-nav" title="次の日" hidden>→</a>
       </div>
+      <p id="topic-title" class="topic-title"></p>
       <p id="archive-notice" class="archive-notice" hidden>
         これは過去の宣言です。<a href="/">今日の宣言をする →</a>
       </p>

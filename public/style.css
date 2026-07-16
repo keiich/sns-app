@@ -71,6 +71,19 @@ body {
   color: var(--subtext);
 }
 
+.app-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* ヘッダーで待機するミン・タツ・ツー */
+.header-mascot {
+  height: 46px;
+  flex-shrink: 0;
+}
+
 /* 日替わりお題カード */
 .topic-card {
   margin: 16px 16px 0;
@@ -92,9 +105,19 @@ body {
 .topic-date {
   flex: 1;
   text-align: center;
-  font-size: 19px;
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--accent);
+}
+
+/* 端末幅に応じて滑らかに縮む(改行させない)大見出し */
+.topic-title {
+  margin: 4px 0 0;
+  text-align: center;
+  font-size: clamp(17px, 5.4vw, 22px);
   font-weight: 900;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
   color: var(--accent);
 }
 
