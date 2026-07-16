@@ -89,7 +89,7 @@ app.get('/', (req, res) => {
   const base = absoluteBase(req);
   const { date, isToday } = resolveViewDate(req.query.date);
   const title = isToday
-    ? 'みんたつ｜今日やることをみんなで宣言・達成するSNS'
+    ? 'みんたつ｜今日みんなで達成したいことを宣言するSNS'
     : `${formatJpDate(date)}のみんなの宣言｜みんたつ`;
   const pageUrl = isToday ? `${base}/` : `${base}/?date=${date}`;
 
@@ -124,7 +124,7 @@ app.get('/post/:id', async (req, res) => {
     rootPost = (await redis.hget(POSTS_KEY, post.rootId || post.parentId)) || post;
   }
   const threadDate = jstDateString(rootPost.createdAt);
-  const title = `${post.username}さんの${post.parentId ? '返信' : '今日やること'} | みんたつ`;
+  const title = `${post.username}さんの${post.parentId ? '返信' : '今日の宣言'} | みんたつ`;
   // 投稿はやることリストの要約、返信は本文をそのまま説明文にする
   const rawDescription = Array.isArray(post.tasks)
     ? `【${post.tasks.filter((t) => t.done).length}/${post.tasks.length} 達成】${post.tasks.map((t) => t.text).join(' / ')}`
@@ -253,14 +253,14 @@ function validateTasksInput(body) {
 
   const { content } = body;
   if (typeof content !== 'string' || content.trim().length === 0) {
-    return { error: '今日やることを入力してください。' };
+    return { error: '今日達成したいことを入力してください。' };
   }
   const lines = content
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
   if (lines.length === 0) {
-    return { error: '今日やることを入力してください。' };
+    return { error: '今日達成したいことを入力してください。' };
   }
   if (lines.length > MAX_TASKS) {
     return { error: `やることは${MAX_TASKS}個以内にしてください。` };
