@@ -667,6 +667,19 @@ usernameInput.addEventListener('change', () => {
     .catch(() => {});
 });
 
+// マスコットはタップするとキャラごとのリアクションで応える
+// (タツ=ジャンプ / ミン=一回転 / ツー=ふりふり)
+const MASCOT_ANIM_CLASSES = ['anim-jump', 'anim-spin', 'anim-wiggle'];
+
+document.addEventListener('click', (event) => {
+  const mouse = event.target.closest('.mascot-tap');
+  if (!mouse) return;
+  mouse.classList.remove(...MASCOT_ANIM_CLASSES);
+  // 一度スタイルを確定させて、連打でもアニメーションが再スタートするようにする
+  void mouse.offsetWidth;
+  mouse.classList.add(`anim-${mouse.dataset.anim}`);
+});
+
 usernameInput.value = getSavedUsername();
 lastProcessedSecret = getTripSecret();
 updateMyTrip().finally(() => loadPosts(true));
