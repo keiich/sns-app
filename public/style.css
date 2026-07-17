@@ -1116,8 +1116,24 @@ button:disabled {
   flex-wrap: wrap;
 }
 
+/* 通報・ブロックはアイコンのみで右端に寄せる(1行に収めるため) */
+.report-button {
+  margin-left: auto;
+}
+
+.report-button,
+.block-button {
+  padding: 5px 6px;
+  opacity: 0.65;
+}
+
+.report-button:hover,
+.block-button:hover {
+  opacity: 1;
+}
+
 .report-button:disabled {
-  color: var(--subtext);
+  opacity: 0.35;
 }
 
 /* 視差・動きを減らす設定のユーザーにはアニメーションを出さない */
