@@ -78,10 +78,106 @@ body {
   gap: 12px;
 }
 
-/* ヘッダーで待機するミン・タツ・ツー */
-.header-mascot {
-  height: 46px;
+/* ミン・タツ・ツーの並び(ヘッダー・フッター共通)。1匹ずつタップで遊べる */
+.mascot-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
   flex-shrink: 0;
+}
+
+.mascot-mid {
+  margin-bottom: 8px;
+}
+
+.header-mascot-row .mascot-tap {
+  height: 42px;
+}
+
+.header-mascot-row .mascot-mid {
+  margin-bottom: 6px;
+}
+
+.footer-mascot-row {
+  justify-content: center;
+}
+
+.footer-mascot-row .mascot-tap {
+  height: 78px;
+}
+
+.mascot-tap {
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transform-origin: 50% 90%;
+  transition: transform 0.15s ease;
+}
+
+.mascot-tap:hover {
+  transform: translateY(-2px);
+}
+
+/* タップ時のリアクション(タツ=ジャンプ / ミン=一回転 / ツー=ふりふり) */
+@keyframes mouse-jump {
+  0% {
+    transform: none;
+  }
+  25% {
+    transform: translateY(-45%) scale(1.06);
+  }
+  50% {
+    transform: translateY(0) scaleY(0.82) scaleX(1.12);
+  }
+  70% {
+    transform: translateY(-18%);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes mouse-spin {
+  0% {
+    transform: rotate(0);
+  }
+  60% {
+    transform: rotate(370deg) scale(1.18);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes mouse-wiggle {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  20% {
+    transform: rotate(-16deg) scale(1.06);
+  }
+  40% {
+    transform: rotate(13deg);
+  }
+  60% {
+    transform: rotate(-10deg);
+  }
+  80% {
+    transform: rotate(6deg);
+  }
+}
+
+.mascot-tap.anim-jump {
+  animation: mouse-jump 0.6s cubic-bezier(0.3, 1.4, 0.4, 1);
+}
+
+.mascot-tap.anim-spin {
+  animation: mouse-spin 0.7s cubic-bezier(0.35, 1.1, 0.4, 1);
+}
+
+.mascot-tap.anim-wiggle {
+  animation: mouse-wiggle 0.6s ease-in-out;
 }
 
 /* 日替わりお題カード */
@@ -709,11 +805,6 @@ button:disabled {
 .app-footer {
   padding: 36px 20px 8px;
   text-align: center;
-}
-
-.footer-mascot {
-  width: 210px;
-  max-width: 64%;
 }
 
 .footer-text {
