@@ -737,6 +737,13 @@ document.addEventListener('click', (event) => {
   }
 });
 
+// PWA: ホーム画面に追加したときアプリとして動くようにする
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {
+    // 登録に失敗しても通常のWeb利用には影響しない
+  });
+}
+
 usernameInput.value = getSavedUsername();
 lastProcessedSecret = getTripSecret();
 updateMyTrip().finally(() => loadPosts(true));
