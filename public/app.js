@@ -246,12 +246,13 @@ function renderReply(reply, myPostTokens, likedPostIds) {
   `;
 }
 
-// 他人の投稿にだけ出す通報・ブロックボタン
+// 他人の投稿にだけ出す通報・ブロックボタン。
+// スマホでアクションが2行にならないよう、アイコンのみで右端に寄せる
 function moderationButtonsHtml(id) {
   const reported = getReportedIds().has(id);
   return `
-    <button class="icon-button report-button" data-action="report" ${reported ? 'disabled' : ''}>${reported ? '🚩 通報済み' : '🚩 通報'}</button>
-    <button class="icon-button block-button" data-action="block">🚫 ブロック</button>
+    <button class="icon-button report-button" data-action="report" title="${reported ? '通報済み' : '通報'}" aria-label="${reported ? '通報済み' : '通報'}" ${reported ? 'disabled' : ''}>🚩</button>
+    <button class="icon-button block-button" data-action="block" title="この人をブロック" aria-label="この人をブロック">🚫</button>
   `;
 }
 
@@ -560,7 +561,8 @@ postList.addEventListener('click', async (event) => {
       const res = await fetch(`/api/posts/${id}/report`, { method: 'POST' });
       if (!res.ok) throw new Error('report failed');
       addReportedId(id);
-      button.textContent = '🚩 通報済み';
+      button.title = '通報済み';
+      button.setAttribute('aria-label', '通報済み');
     } catch (err) {
       button.disabled = false;
     }
