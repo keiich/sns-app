@@ -1083,6 +1083,43 @@ button:disabled {
   color: var(--accent);
 }
 
+.footer-links {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--subtext);
+}
+
+.footer-links a {
+  color: var(--subtext);
+  text-decoration: underline;
+}
+
+.unblock-all {
+  margin-top: 10px;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--subtext);
+  font-size: 12px;
+  font-weight: normal;
+  padding: 4px 14px;
+  box-shadow: none;
+}
+
+.unblock-all:hover {
+  background: var(--border);
+  color: var(--text);
+  transform: none;
+  box-shadow: none;
+}
+
+.post-actions {
+  flex-wrap: wrap;
+}
+
+.report-button:disabled {
+  color: var(--subtext);
+}
+
 /* 視差・動きを減らす設定のユーザーにはアニメーションを出さない */
 @media (prefers-reduced-motion: reduce) {
   *,
