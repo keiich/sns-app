@@ -157,6 +157,12 @@ app.get('/post/:id', async (req, res) => {
 </html>`);
 });
 
+// Androidアプリ(TWA)がこのサイトと同一所有者であることの証明(Digital Asset Links)。
+// express.staticはドットで始まるパスを配信しないため、明示的にルーティングする
+app.get('/.well-known/assetlinks.json', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'assetlinks.json'));
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 function hashToken(token) {
