@@ -20,7 +20,10 @@ const MAX_TASK_LENGTH = 60;
 const POSTS_KEY = 'sns:posts';
 const LIKES_KEY = 'sns:likes';
 const SHARES_KEY = 'sns:shares';
+const REPORTS_KEY = 'sns:reports';
 const INDEX_KEY = 'sns:posts:index';
+// この回数通報された投稿は自動で非表示にする(アプリストアのUGCポリシー対応)
+const REPORT_HIDE_THRESHOLD = 3;
 // 返信も投稿と同じハッシュ(POSTS_KEY)に保存し、親投稿ごとの並び順だけを
 // 個別のソート済みセット(member=replyId, score=createdAt)で管理する
 const REPLIES_INDEX_PREFIX = 'sns:replies:';
@@ -111,7 +114,7 @@ app.get('/', (req, res) => {
 // ブラウザで開いた人はタイムライン上の該当投稿へリダイレクトする。
 app.get('/post/:id', async (req, res) => {
   const post = await redis.hget(POSTS_KEY, req.params.id);
-  if (!post) {
+  if (!post || post.hidden) {
     return res.redirect('/');
   }
 
@@ -293,8 +296,12 @@ app.get('/api/posts', async (req, res) => {
     Promise.all(allIds.map((id) => redis.hget(SHARES_KEY, id))),
   ]);
 
+  // 通報で非表示になった投稿・返信は一覧から除外する
   const publicById = new Map(
-    allIds.map((id, i) => [id, postsData[i] ? toPublicPost(postsData[i], likesData[i], sharesData[i]) : null])
+    allIds.map((id, i) => [
+      id,
+      postsData[i] && !postsData[i].hidden ? toPublicPost(postsData[i], likesData[i], sharesData[i]) : null,
+    ])
   );
 
   const posts = ids
@@ -424,6 +431,20 @@ app.post('/api/posts/:id/like', async (req, res) => {
   res.json(toPublicPost(post, likes, shares));
 });
 
+// 通報。一定回数に達した投稿・返信は自動で非表示になる
+app.post('/api/posts/:id/report', async (req, res) => {
+  const post = await redis.hget(POSTS_KEY, req.params.id);
+  if (!post) {
+    return res.status(404).json({ error: '投稿が見つかりません。' });
+  }
+  const count = await redis.hincrby(REPORTS_KEY, req.params.id, 1);
+  if (count >= REPORT_HIDE_THRESHOLD && !post.hidden) {
+    post.hidden = true;
+    await redis.hset(POSTS_KEY, { [req.params.id]: post });
+  }
+  res.json({ reported: true, hidden: count >= REPORT_HIDE_THRESHOLD });
+});
+
 // いいねの取り消し。0未満にはならないように補正する
 app.delete('/api/posts/:id/like', async (req, res) => {
   const post = await redis.hget(POSTS_KEY, req.params.id);
@@ -469,6 +490,7 @@ app.delete('/api/posts/:id', async (req, res) => {
       redis.hdel(POSTS_KEY, req.params.id),
       redis.hdel(LIKES_KEY, req.params.id),
       redis.hdel(SHARES_KEY, req.params.id),
+      redis.hdel(REPORTS_KEY, req.params.id),
       redis.zrem(replyIndexKey(post.rootId || post.parentId), req.params.id),
     ]);
   } else {
@@ -478,6 +500,7 @@ app.delete('/api/posts/:id', async (req, res) => {
       redis.hdel(POSTS_KEY, req.params.id, ...replyIds),
       redis.hdel(LIKES_KEY, req.params.id, ...replyIds),
       redis.hdel(SHARES_KEY, req.params.id, ...replyIds),
+      redis.hdel(REPORTS_KEY, req.params.id, ...replyIds),
       redis.zrem(INDEX_KEY, req.params.id),
       redis.del(replyIndexKey(req.params.id)),
     ]);

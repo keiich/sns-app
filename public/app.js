@@ -83,6 +83,37 @@ function removeLikedPostId(id) {
   localStorage.setItem(LIKED_POST_IDS_KEY, JSON.stringify([...ids]));
 }
 
+// ---- 通報とブロック(アプリストアのUGCポリシー対応) ----
+const REPORTED_IDS_KEY = 'sns-app:reportedIds';
+const BLOCKED_AUTHORS_KEY = 'sns-app:blockedAuthors';
+
+function getReportedIds() {
+  return new Set(JSON.parse(localStorage.getItem(REPORTED_IDS_KEY) || '[]'));
+}
+
+function addReportedId(id) {
+  const ids = getReportedIds();
+  ids.add(id);
+  localStorage.setItem(REPORTED_IDS_KEY, JSON.stringify([...ids]));
+}
+
+function getBlockedAuthors() {
+  return JSON.parse(localStorage.getItem(BLOCKED_AUTHORS_KEY) || '[]');
+}
+
+// トリップ持ちはトリップで(名前を変えても効く)、名無し等はユーザー名でブロック判定する
+function isBlockedAuthor(post, blockedAuthors) {
+  return blockedAuthors.some((b) => (b.trip ? post.trip === b.trip : !post.trip && post.username === b.username));
+}
+
+function addBlockedAuthor(author) {
+  const blockedAuthors = getBlockedAuthors();
+  if (!isBlockedAuthor(author, blockedAuthors)) {
+    blockedAuthors.push(author.trip ? { trip: author.trip } : { username: author.username });
+    localStorage.setItem(BLOCKED_AUTHORS_KEY, JSON.stringify(blockedAuthors));
+  }
+}
+
 function shareButtonHtml(count) {
   return `🔗 共有${count > 0 ? ` <span class="share-count">${count}</span>` : ''}`;
 }
@@ -209,15 +240,37 @@ function renderReply(reply, myPostTokens, likedPostIds) {
         </button>
         <button class="icon-button reply-button" data-action="reply">💬 返信</button>
         <button class="icon-button share-button" data-action="share">${shareButtonHtml(reply.shares)}</button>
-        ${isMine ? '<button class="icon-button delete-button" data-action="delete">削除</button>' : ''}
+        ${isMine ? '<button class="icon-button delete-button" data-action="delete">削除</button>' : moderationButtonsHtml(reply.id)}
       </div>
     </li>
+  `;
+}
+
+// 他人の投稿にだけ出す通報・ブロックボタン
+function moderationButtonsHtml(id) {
+  const reported = getReportedIds().has(id);
+  return `
+    <button class="icon-button report-button" data-action="report" ${reported ? 'disabled' : ''}>${reported ? '🚩 通報済み' : '🚩 通報'}</button>
+    <button class="icon-button block-button" data-action="block">🚫 ブロック</button>
   `;
 }
 
 function renderPosts(posts, animate = false) {
   // ふわっと出す演出は初回表示のときだけ(30秒ごとの自動更新で毎回動くとうるさい)
   postList.classList.toggle('animate', animate);
+
+  // ブロック中の相手の投稿はこの端末では表示しない
+  const blockedAuthors = getBlockedAuthors();
+  if (blockedAuthors.length > 0) {
+    posts = posts
+      .filter((post) => !isBlockedAuthor(post, blockedAuthors))
+      .map((post) => ({
+        ...post,
+        replies: (post.replies || []).filter((reply) => !isBlockedAuthor(reply, blockedAuthors)),
+      }));
+  }
+  const unblockAllButton = document.getElementById('unblock-all');
+  if (unblockAllButton) unblockAllButton.hidden = blockedAuthors.length === 0;
 
   if (posts.length === 0) {
     // マスコットは直下のフッターに常駐しているので、空状態はテキストのみにする
@@ -250,7 +303,7 @@ function renderPosts(posts, animate = false) {
             </button>
             <button class="icon-button reply-button" data-action="reply">${replyButtonHtml(replies.length)}</button>
             <button class="icon-button share-button" data-action="share">${shareButtonHtml(post.shares)}</button>
-            ${isMine ? '<button class="icon-button delete-button" data-action="delete">削除</button>' : ''}
+            ${isMine ? '<button class="icon-button delete-button" data-action="delete">削除</button>' : moderationButtonsHtml(post.id)}
           </div>
           ${replies.length > 0 ? `<ul class="reply-list">${replies.map((r) => renderReply(r, myPostTokens, likedPostIds)).join('')}</ul>` : ''}
           <form class="reply-form" hidden>
@@ -500,6 +553,23 @@ postList.addEventListener('click', async (event) => {
       // 表示は先に更新済みなので、カウントの記録は裏で送るだけでよい
       fetch(`/api/posts/${id}/share`, { method: 'POST' }).catch(() => {});
     }
+  } else if (action === 'report') {
+    if (!confirm('この投稿を不適切な内容として通報しますか？')) return;
+    button.disabled = true;
+    try {
+      const res = await fetch(`/api/posts/${id}/report`, { method: 'POST' });
+      if (!res.ok) throw new Error('report failed');
+      addReportedId(id);
+      button.textContent = '🚩 通報済み';
+    } catch (err) {
+      button.disabled = false;
+    }
+  } else if (action === 'block') {
+    const username = targetItem.querySelector('.post-username').textContent;
+    const tripEl = targetItem.querySelector('.post-trip');
+    if (!confirm(`${withSan(username)}の投稿を、この端末で表示しないようにしますか？`)) return;
+    addBlockedAuthor({ username, trip: tripEl ? tripEl.textContent.replace('◆', '') : null });
+    loadPosts().catch(() => {});
   } else if (action === 'like') {
     // もう一度押すと取り消せるトグル式。
     // サーバーの応答を待たずに即座に反映し(楽観的更新)、失敗したら巻き戻す
@@ -735,6 +805,12 @@ document.addEventListener('click', (event) => {
   if (isRare) {
     spawnSparkles(mouse);
   }
+});
+
+document.getElementById('unblock-all').addEventListener('click', () => {
+  if (!confirm('ブロックした相手をすべて解除しますか？')) return;
+  localStorage.removeItem(BLOCKED_AUTHORS_KEY);
+  loadPosts().catch(() => {});
 });
 
 // PWA: ホーム画面に追加したときアプリとして動くようにする
