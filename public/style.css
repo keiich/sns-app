@@ -32,6 +32,85 @@
   box-sizing: border-box;
 }
 
+/* ---- 起動スプラッシュ(アイコンと同じブランド緑一面にロゴと3匹) ---- */
+#splash {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: #16a34a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.45s ease, visibility 0.45s ease;
+}
+
+#splash.splash-hide {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.splash-inner {
+  text-align: center;
+}
+
+.splash-mice {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 10px;
+}
+
+.splash-mice img {
+  height: 86px;
+  animation: splash-bob 1.4s ease-in-out infinite;
+}
+
+.splash-mice .splash-mid {
+  margin-bottom: 12px;
+  animation-delay: 0.15s;
+}
+
+.splash-mice img:last-child {
+  animation-delay: 0.3s;
+}
+
+@keyframes splash-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+.splash-logo {
+  margin: 20px 0 0;
+  color: #fff;
+  font-size: 36px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  animation: splash-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both 0.15s;
+}
+
+.splash-tagline {
+  margin: 6px 0 0;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  animation: splash-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both 0.32s;
+}
+
+@keyframes splash-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 body {
   margin: 0;
   font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Segoe UI", sans-serif;

@@ -1,3 +1,30 @@
+// ---- 起動スプラッシュ(ブラウザセッションの初回起動時だけ表示) ----
+const SPLASH_SHOWN_KEY = 'sns-app:splashShown';
+
+(function initSplash() {
+  const splash = document.getElementById('splash');
+  if (!splash) return;
+  let alreadyShown = false;
+  try {
+    alreadyShown = sessionStorage.getItem(SPLASH_SHOWN_KEY) === '1';
+  } catch (err) {
+    // プライベートモード等でsessionStorageが使えない場合は毎回表示でよい
+  }
+  if (alreadyShown) {
+    splash.remove();
+    return;
+  }
+  try {
+    sessionStorage.setItem(SPLASH_SHOWN_KEY, '1');
+  } catch (err) {
+    // 保存できなくても表示自体は続行
+  }
+  setTimeout(() => {
+    splash.classList.add('splash-hide');
+    setTimeout(() => splash.remove(), 600);
+  }, 1700);
+})();
+
 const postForm = document.getElementById('post-form');
 const usernameInput = document.getElementById('username-input');
 const contentInput = document.getElementById('content-input');
