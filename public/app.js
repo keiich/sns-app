@@ -667,17 +667,47 @@ usernameInput.addEventListener('change', () => {
     .catch(() => {});
 });
 
-// マスコットはタップするとキャラごとのリアクションで応える
-// (タツ=ジャンプ / ミン=一回転 / ツー=ふりふり)
-const MASCOT_ANIM_CLASSES = ['anim-jump', 'anim-spin', 'anim-wiggle'];
+// マスコットはタップするとキャラごとの技プールからランダムにリアクションする。
+// 低確率でレア技(金色に光る大ジャンプ2回転+キラキラ)が出る
+const MASCOT_MOVES = {
+  tatsu: ['jump', 'hop', 'squish'], // 元気担当: ジャンプ系
+  min: ['spin', 'bow', 'float'], // クール担当: ゆっくり回転・おじぎ・浮遊
+  tsu: ['wiggle', 'sway', 'pulse'], // 応援担当: ダンス系
+};
+const MASCOT_RARE_MOVE = 'super';
+const MASCOT_RARE_CHANCE = 0.08;
+const MASCOT_ANIM_CLASSES = [...new Set(Object.values(MASCOT_MOVES).flat()), MASCOT_RARE_MOVE].map(
+  (move) => `anim-${move}`
+);
+
+function spawnSparkles(el) {
+  const rect = el.getBoundingClientRect();
+  const symbols = ['✨', '⭐', '💫'];
+  for (let i = 0; i < 6; i++) {
+    const sparkle = document.createElement('span');
+    sparkle.className = 'sparkle';
+    sparkle.textContent = symbols[i % symbols.length];
+    sparkle.style.left = `${rect.left + rect.width / 2 + (Math.random() - 0.5) * rect.width * 1.6}px`;
+    sparkle.style.top = `${rect.top + rect.height * (0.1 + Math.random() * 0.7)}px`;
+    sparkle.style.animationDelay = `${Math.random() * 0.3}s`;
+    document.body.appendChild(sparkle);
+    setTimeout(() => sparkle.remove(), 1500);
+  }
+}
 
 document.addEventListener('click', (event) => {
   const mouse = event.target.closest('.mascot-tap');
   if (!mouse) return;
+  const moves = MASCOT_MOVES[mouse.dataset.mouse] || MASCOT_MOVES.min;
+  const isRare = Math.random() < MASCOT_RARE_CHANCE;
+  const move = isRare ? MASCOT_RARE_MOVE : moves[Math.floor(Math.random() * moves.length)];
   mouse.classList.remove(...MASCOT_ANIM_CLASSES);
   // 一度スタイルを確定させて、連打でもアニメーションが再スタートするようにする
   void mouse.offsetWidth;
-  mouse.classList.add(`anim-${mouse.dataset.anim}`);
+  mouse.classList.add(`anim-${move}`);
+  if (isRare) {
+    spawnSparkles(mouse);
+  }
 });
 
 usernameInput.value = getSavedUsername();

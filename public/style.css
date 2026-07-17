@@ -118,7 +118,9 @@ body {
   transform: translateY(-2px);
 }
 
-/* タップ時のリアクション(タツ=ジャンプ / ミン=一回転 / ツー=ふりふり) */
+/* ---- タップ時のリアクション(キャラごとに技プールがあり、ランダムで出る) ---- */
+
+/* タツ(元気担当) */
 @keyframes mouse-jump {
   0% {
     transform: none;
@@ -137,18 +139,87 @@ body {
   }
 }
 
-@keyframes mouse-spin {
-  0% {
-    transform: rotate(0);
+@keyframes mouse-hop {
+  0%,
+  100% {
+    transform: none;
+  }
+  20% {
+    transform: translateY(-22%);
+  }
+  40% {
+    transform: translateY(0) scaleY(0.92);
   }
   60% {
-    transform: rotate(370deg) scale(1.18);
+    transform: translateY(-28%) rotate(4deg);
   }
-  100% {
-    transform: rotate(360deg);
+  80% {
+    transform: translateY(0) scaleY(0.9);
   }
 }
 
+@keyframes mouse-squish {
+  0%,
+  100% {
+    transform: none;
+  }
+  30% {
+    transform: scaleY(0.7) scaleX(1.22);
+  }
+  60% {
+    transform: scaleY(1.12) scaleX(0.92);
+  }
+  80% {
+    transform: scaleY(0.94) scaleX(1.06);
+  }
+}
+
+/* ミン(クール担当)。回転はゆっくり優雅に */
+@keyframes mouse-spin {
+  0% {
+    transform: rotate(0) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.1);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+@keyframes mouse-bow {
+  0%,
+  100% {
+    transform: none;
+  }
+  30% {
+    transform: rotate(14deg) translateY(7%);
+  }
+  55% {
+    transform: rotate(0) translateY(0);
+  }
+  75% {
+    transform: rotate(9deg) translateY(4%);
+  }
+}
+
+@keyframes mouse-float {
+  0%,
+  100% {
+    transform: none;
+  }
+  30% {
+    transform: translateY(-32%) rotate(-5deg);
+  }
+  60% {
+    transform: translateY(-26%) rotate(5deg);
+  }
+  85% {
+    transform: translateY(-8%) rotate(0);
+  }
+}
+
+/* ツー(応援担当) */
 @keyframes mouse-wiggle {
   0%,
   100% {
@@ -168,16 +239,129 @@ body {
   }
 }
 
+@keyframes mouse-sway {
+  0%,
+  100% {
+    transform: none;
+  }
+  20% {
+    transform: translateX(-14%) rotate(-9deg);
+  }
+  45% {
+    transform: translateX(14%) rotate(9deg);
+  }
+  70% {
+    transform: translateX(-9%) rotate(-6deg);
+  }
+  88% {
+    transform: translateX(5%) rotate(3deg);
+  }
+}
+
+@keyframes mouse-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.18);
+  }
+  45% {
+    transform: scale(1);
+  }
+  65% {
+    transform: scale(1.14);
+  }
+}
+
+/* レア技(全員共通・低確率): 金色に光りながら大ジャンプ2回転 */
+@keyframes mouse-super {
+  0% {
+    transform: none;
+    filter: none;
+  }
+  20% {
+    transform: translateY(-70%) rotate(180deg) scale(1.15);
+    filter: drop-shadow(0 0 10px rgba(255, 200, 60, 0.9));
+  }
+  45% {
+    transform: translateY(-95%) rotate(360deg) scale(1.28);
+    filter: drop-shadow(0 0 16px rgba(255, 200, 60, 1));
+  }
+  70% {
+    transform: translateY(0) rotate(720deg) scaleY(0.8) scaleX(1.15);
+    filter: drop-shadow(0 0 8px rgba(255, 200, 60, 0.7));
+  }
+  85% {
+    transform: translateY(-14%) rotate(720deg);
+  }
+  100% {
+    transform: rotate(720deg);
+    filter: none;
+  }
+}
+
 .mascot-tap.anim-jump {
   animation: mouse-jump 0.6s cubic-bezier(0.3, 1.4, 0.4, 1);
 }
 
+.mascot-tap.anim-hop {
+  animation: mouse-hop 0.8s ease-in-out;
+}
+
+.mascot-tap.anim-squish {
+  animation: mouse-squish 0.55s cubic-bezier(0.3, 1.3, 0.4, 1);
+}
+
 .mascot-tap.anim-spin {
-  animation: mouse-spin 0.7s cubic-bezier(0.35, 1.1, 0.4, 1);
+  animation: mouse-spin 1.3s cubic-bezier(0.45, 0.05, 0.35, 1);
+}
+
+.mascot-tap.anim-bow {
+  animation: mouse-bow 0.9s ease-in-out;
+}
+
+.mascot-tap.anim-float {
+  animation: mouse-float 1.2s ease-in-out;
 }
 
 .mascot-tap.anim-wiggle {
   animation: mouse-wiggle 0.6s ease-in-out;
+}
+
+.mascot-tap.anim-sway {
+  animation: mouse-sway 0.9s ease-in-out;
+}
+
+.mascot-tap.anim-pulse {
+  animation: mouse-pulse 0.7s ease-in-out;
+}
+
+.mascot-tap.anim-super {
+  animation: mouse-super 1.4s cubic-bezier(0.35, 0.9, 0.4, 1);
+}
+
+/* レア技のときに舞うキラキラ */
+.sparkle {
+  position: fixed;
+  z-index: 200;
+  pointer-events: none;
+  font-size: 15px;
+  animation: sparkle-up 1.1s ease-out both;
+}
+
+@keyframes sparkle-up {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.5);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-48px) scale(1.25) rotate(25deg);
+  }
 }
 
 /* 日替わりお題カード */
